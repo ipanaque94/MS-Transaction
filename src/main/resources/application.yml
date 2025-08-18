@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: transaction-service
+  cloud:
+    config:
+      enabled: false
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/transactiondb
+server:
+  port: 8082
+
+logging:
+  level:
+    org.springframework: INFO

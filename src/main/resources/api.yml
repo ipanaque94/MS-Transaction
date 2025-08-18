@@ -1,0 +1,201 @@
+openapi: 3.0.3
+info:
+  title: Transaction Microservice API
+  version: 1.0.0
+  description: API para gestionar transacciones bancarias como depósitos, retiros, pagos y cargos por crédito.
+
+servers:
+  - url: http://localhost:8080
+    description: Servidor local de desarrollo
+
+paths:
+  /api/transactions:
+    get:
+      summary: Listar todas las transacciones
+      operationId: getAllTransactions
+      responses:
+        '200':
+          description: Lista de transacciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransactionResponse'
+              examples:
+                sampleList:
+                  summary: Lista de ejemplo
+                  value:
+                    - id: "txn-001"
+                      productId: "prod-123"
+                      type: "DEPOSIT"
+                      amount: 100.0
+                      date: "2025-08-14T10:00:00Z"
+                      description: "Depósito inicial"
+
+    post:
+      summary: Crear una nueva transacción
+      operationId: createTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionRequest'
+            example:
+              productId: "prod-123"
+              type: "DEPOSIT"
+              amount: 150.75
+              date: "2025-08-14T12:00:00Z"
+              description: "Pago mensual"
+      responses:
+        '201':
+          description: Transacción creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                id: "txn-002"
+                productId: "prod-123"
+                type: "DEPOSIT"
+                amount: 150.75
+                date: "2025-08-14T12:00:00Z"
+                description: "Pago mensual"
+
+  /api/transactions/{id}:
+    get:
+      summary: Obtener transacción por ID
+      operationId: getTransactionById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transacción encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                id: "txn-001"
+                productId: "prod-123"
+                type: "DEPOSIT"
+                amount: 100.0
+                date: "2025-08-14T10:00:00Z"
+                description: "Depósito inicial"
+        '404':
+          description: Transacción no encontrada
+
+    put:
+      summary: Actualizar transacción por ID
+      operationId: updateTransaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionRequest'
+            example:
+              productId: "prod-123"
+              type: "PAYMENT"
+              amount: 200.0
+              date: "2025-08-15T09:00:00Z"
+              description: "Pago de servicio"
+      responses:
+        '200':
+          description: Transacción actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                id: "txn-003"
+                productId: "prod-123"
+                type: "PAYMENT"
+                amount: 200.0
+                date: "2025-08-15T09:00:00Z"
+                description: "Pago de servicio"
+        '404':
+          description: Transacción no encontrada
+
+    delete:
+      summary: Eliminar transacción por ID
+      operationId: deleteTransaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Transacción eliminada
+        '404':
+          description: Transacción no encontrada
+
+components:
+  schemas:
+    TransactionRequest:
+      type: object
+      required:
+        - productId
+        - type
+        - amount
+        - date
+      properties:
+        productId:
+          type: string
+          description: ID del producto relacionado
+        type:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL, PAYMENT, CREDIT_CHARGE]
+          description: Tipo de transacción
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: Monto de la transacción
+        date:
+          type: string
+          format: date-time
+          description: Fecha y hora de la transacción
+        description:
+          type: string
+          nullable: true
+          description: Descripción opcional
+
+    TransactionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID único de la transacción
+        productId:
+          type: string
+          description: ID del producto relacionado
+        type:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL, PAYMENT, CREDIT_CHARGE]
+          description: Tipo de transacción
+        amount:
+          type: number
+          format: decimal
+          description: Monto de la transacción
+        date:
+          type: string
+          format: date-time
+          description: Fecha y hora de la transacción
+        description:
+          type: string
+          nullable: true
+          description: Descripción opcional
