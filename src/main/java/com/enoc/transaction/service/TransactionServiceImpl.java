@@ -2,6 +2,7 @@ package com.enoc.transaction.service;
 
 import com.enoc.transaction.model.Transaction;
 import com.enoc.transaction.repository.TransactionRepository;
+import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import org.openapitools.jackson.nullable.JsonNullable;
 import org.openapitools.model.TransactionRequest;
@@ -10,8 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
-import java.time.ZoneOffset;
 
 @RequiredArgsConstructor
 @Service
@@ -45,6 +44,7 @@ public class TransactionServiceImpl implements TransactionService {
                     existing.setAmount(request.getAmount());
                     existing.setType(Transaction.TransactionType.valueOf(request.getType().getValue()));
                     existing.setDate(request.getDate().toLocalDateTime());
+                    existing.setDescription(request.getDescription().orElse(null));
                     return repository.save(existing);
                 })
                 .map(this::entityToResponse);
@@ -74,6 +74,5 @@ public class TransactionServiceImpl implements TransactionService {
         dto.setDate(entity.getDate().atOffset(ZoneOffset.UTC));
         dto.setDescription(JsonNullable.of(entity.getDescription()));
         return dto;
-
     }
 }

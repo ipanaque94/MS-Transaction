@@ -1,18 +1,20 @@
 package com.enoc.transaction.mapper;
 
 import com.enoc.transaction.model.Transaction;
-import com.enoc.transaction.model.TransactionRequest;
-import com.enoc.transaction.model.TransactionResponse;
+import java.time.OffsetDateTime;
 import lombok.NoArgsConstructor;
 import org.openapitools.jackson.nullable.JsonNullable;
+import org.openapitools.model.TransactionRequest;
+import org.openapitools.model.TransactionResponse;
 
-import java.time.OffsetDateTime;
 
 @NoArgsConstructor
 public final class TransactionMapper {
 
     public static Transaction toEntity(TransactionRequest request) {
-        if (request == null) return null;
+        if (request == null) {
+            return null;
+        }
 
         Transaction transaction = new Transaction();
 
@@ -32,10 +34,13 @@ public final class TransactionMapper {
         transaction.setDescription(request.getDescription().orElse(null));
 
         return transaction;
+
     }
 
     public static TransactionResponse toResponse(Transaction transaction) {
-        if (transaction == null) return null;
+        if (transaction == null) {
+            return null;
+        }
 
         TransactionResponse response = new TransactionResponse();
 
@@ -60,7 +65,10 @@ public final class TransactionMapper {
     }
 
     public static Transaction toEntity(TransactionResponse response) {
-        if (response == null) return null;
+        if (response == null) {
+            return null;
+
+        }
 
         Transaction transaction = new Transaction();
 
@@ -83,7 +91,9 @@ public final class TransactionMapper {
     }
 
     public static TransactionRequest toRequest(Transaction transaction) {
-        if (transaction == null) return null;
+        if (transaction == null) {
+            return null;
+        }
 
         TransactionRequest request = new TransactionRequest(
                 transaction.getProductId(),
