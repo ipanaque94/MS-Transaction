@@ -18,7 +18,7 @@
         <module name="WhitespaceAround"/>
         <module name="ImportOrder">
             <property name="ordered" value="true"/>
-            <property name="separated" value="true"/>
+            <property name="separated" value="false"/>
             <property name="sortStaticImportsAlphabetically" value="true"/>
         </module>
         <module name="OneTopLevelClass"/>

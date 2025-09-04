@@ -1,13 +1,15 @@
 package com.enoc.transaction.service;
 
+import com.enoc.transaction.enums.TransactionType;
+import com.enoc.transaction.mapper.TransactionMapper;
 import com.enoc.transaction.model.Transaction;
 import com.enoc.transaction.repository.TransactionRepository;
-import java.time.ZoneOffset;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.openapitools.jackson.nullable.JsonNullable;
 import org.openapitools.model.TransactionRequest;
 import org.openapitools.model.TransactionResponse;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -16,25 +18,48 @@ import reactor.core.publisher.Mono;
 @Service
 public class TransactionServiceImpl implements TransactionService {
 
-    @Autowired
-    private TransactionRepository repository;
+
+    private final TransactionRepository repository;
+    private final TransactionMapper mapper;
+
+    private static final int FREE_TRANSACTION_LIMIT = 5;
+    private static final BigDecimal COMMISSION_AMOUNT = new BigDecimal("2.50");
 
     @Override
     public Mono<TransactionResponse> create(TransactionRequest request) {
-        return repository.save(requestToEntity(request))
-                .map(this::entityToResponse);
+        List<String> commissionableTypeNames = List.of(
+                TransactionRequest.TypeEnum.DEPOSIT.name(),
+                TransactionRequest.TypeEnum.WITHDRAWAL.name()
+        );
+
+
+        return repository.countByAccountIdAndTypeIn(request.getAccountId(), commissionableTypeNames)
+                .flatMap(count -> {
+                    Transaction entity = mapper.toEntity(request);
+
+                    boolean isCommissionable = commissionableTypeNames.contains(request.getType().name());
+                    entity.setCommissionApplied(
+                            isCommissionable && count >= FREE_TRANSACTION_LIMIT
+                                    ? COMMISSION_AMOUNT
+                                    : BigDecimal.ZERO
+                    );
+
+                    return repository.save(entity);
+                })
+                .map(mapper::toResponse);
+
     }
 
     @Override
     public Flux<TransactionResponse> findAll() {
         return repository.findAll()
-                .map(this::entityToResponse);
+                .map(mapper::toResponse);
     }
 
     @Override
     public Mono<TransactionResponse> findById(String id) {
         return repository.findById(id)
-                .map(this::entityToResponse);
+                .map(mapper::toResponse);
     }
 
     @Override
@@ -42,12 +67,12 @@ public class TransactionServiceImpl implements TransactionService {
         return repository.findById(id)
                 .flatMap(existing -> {
                     existing.setAmount(request.getAmount());
-                    existing.setType(Transaction.TransactionType.valueOf(request.getType().getValue()));
+                    existing.setType(TransactionType.TRANSFER_INTERNAL);
                     existing.setDate(request.getDate().toLocalDateTime());
                     existing.setDescription(request.getDescription().orElse(null));
                     return repository.save(existing);
                 })
-                .map(this::entityToResponse);
+                .map(mapper::toResponse);
     }
 
     @Override
@@ -55,24 +80,13 @@ public class TransactionServiceImpl implements TransactionService {
         return repository.deleteById(id);
     }
 
-    private Transaction requestToEntity(TransactionRequest dto) {
-        return Transaction.builder()
-                .productId(dto.getProductId())
-                .type(Transaction.TransactionType.valueOf(dto.getType().name()))
-                .amount(dto.getAmount())
-                .date(dto.getDate().toLocalDateTime())
-                .description(dto.getDescription().orElse(null))
-                .build();
+    @Override
+    public Mono<Long> countByAccountIdAndTypeIn(String accountId, List<TransactionType> types) {
+        List<String> typeNames = types.stream()
+                .map(Enum::name)
+                .collect(Collectors.toList());
+        return repository.countByAccountIdAndTypeIn(accountId, typeNames);
     }
 
-    private TransactionResponse entityToResponse(Transaction entity) {
-        TransactionResponse dto = new TransactionResponse();
-        dto.setId(entity.getId());
-        dto.setProductId(entity.getProductId());
-        dto.setType(TransactionResponse.TypeEnum.valueOf(entity.getType().name()));
-        dto.setAmount(entity.getAmount());
-        dto.setDate(entity.getDate().atOffset(ZoneOffset.UTC));
-        dto.setDescription(JsonNullable.of(entity.getDescription()));
-        return dto;
-    }
+
 }

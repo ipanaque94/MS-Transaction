@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Transaction Microservice API
   version: 1.0.0
-  description: API para gestionar transacciones bancarias como depósitos, retiros, pagos y cargos por crédito.
+  description: API para gestionar transacciones bancarias como depósitos, retiros, pagos, transferencias y cargos por crédito.
 
 servers:
   - url: http://localhost:8080
@@ -22,16 +22,6 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TransactionResponse'
-              examples:
-                sampleList:
-                  summary: Lista de ejemplo
-                  value:
-                    - id: "txn-001"
-                      productId: "prod-123"
-                      type: "DEPOSIT"
-                      amount: 100.0
-                      date: "2025-08-14T10:00:00Z"
-                      description: "Depósito inicial"
 
     post:
       summary: Crear una nueva transacción
@@ -42,26 +32,13 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/TransactionRequest'
-            example:
-              productId: "prod-123"
-              type: "DEPOSIT"
-              amount: 150.75
-              date: "2025-08-14T12:00:00Z"
-              description: "Pago mensual"
       responses:
-        '201':
-          description: Transacción creada
+        '200':
+          description: Transacción registrada
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransactionResponse'
-              example:
-                id: "txn-002"
-                productId: "prod-123"
-                type: "DEPOSIT"
-                amount: 150.75
-                date: "2025-08-14T12:00:00Z"
-                description: "Pago mensual"
 
   /api/transactions/{id}:
     get:
@@ -80,13 +57,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransactionResponse'
-              example:
-                id: "txn-001"
-                productId: "prod-123"
-                type: "DEPOSIT"
-                amount: 100.0
-                date: "2025-08-14T10:00:00Z"
-                description: "Depósito inicial"
         '404':
           description: Transacción no encontrada
 
@@ -105,12 +75,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/TransactionRequest'
-            example:
-              productId: "prod-123"
-              type: "PAYMENT"
-              amount: 200.0
-              date: "2025-08-15T09:00:00Z"
-              description: "Pago de servicio"
       responses:
         '200':
           description: Transacción actualizada
@@ -118,13 +82,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransactionResponse'
-              example:
-                id: "txn-003"
-                productId: "prod-123"
-                type: "PAYMENT"
-                amount: 200.0
-                date: "2025-08-15T09:00:00Z"
-                description: "Pago de servicio"
         '404':
           description: Transacción no encontrada
 
@@ -138,7 +95,7 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        '200':
           description: Transacción eliminada
         '404':
           description: Transacción no encontrada
@@ -154,7 +111,7 @@ paths:
             schema:
               $ref: '#/components/schemas/TransferRequest'
       responses:
-        '201':
+        '200':
           description: Transferencia registrada
           content:
             application/json:
@@ -214,7 +171,6 @@ paths:
                 items:
                   $ref: '#/components/schemas/DailyBalance'
 
-
 components:
   schemas:
     TransactionRequest:
@@ -224,14 +180,26 @@ components:
         - type
         - amount
         - date
+        - accountId
+        - operationTypeId
+        - status
+        - origin
+        - eventDate
       properties:
         productId:
           type: string
         customerId:
           type: string
+        accountId:
+          type: string
+        operationTypeId:
+          type: string
         type:
           type: string
           enum: [ DEPOSIT, WITHDRAWAL, PAYMENT, CREDIT_CHARGE, TRANSFER_INTERNAL, TRANSFER_EXTERNAL ]
+        origin:
+          type: string
+          enum: [ INTERNAL, EXTERNAL ]
         amount:
           type: number
           format: decimal
@@ -239,6 +207,12 @@ components:
         date:
           type: string
           format: date-time
+        eventDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [ APPROVED, REJECTED, PENDING ]
         description:
           type: string
           nullable: true
@@ -259,15 +233,28 @@ components:
           type: string
         customerId:
           type: string
+        accountId:
+          type: string
+        operationTypeId:
+          type: string
         type:
           type: string
           enum: [ DEPOSIT, WITHDRAWAL, PAYMENT, CREDIT_CHARGE, TRANSFER_INTERNAL, TRANSFER_EXTERNAL ]
+        origin:
+          type: string
+          enum: [ INTERNAL, EXTERNAL ]
         amount:
           type: number
           format: decimal
         date:
           type: string
           format: date-time
+        eventDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [ APPROVED, REJECTED, PENDING ]
         description:
           type: string
           nullable: true
