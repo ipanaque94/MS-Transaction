@@ -1,4 +1,4 @@
-package com.enoc.transaction.enums;
+package com.enoc.transaction.domain.model.enums;
 
 public enum StatusEnum {
     APPROVED,

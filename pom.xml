@@ -209,6 +209,9 @@
                     <includeTestSourceDirectory>true</includeTestSourceDirectory>
                     <linkXRef>false</linkXRef>
                     <violationSeverity>warning</violationSeverity>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
+                    </sourceDirectories>
                 </configuration>
             </plugin>
 
