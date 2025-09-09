@@ -13,7 +13,7 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode
+@EqualsAndHashCode(exclude = {"date", "eventDate"})
 public class TransactionResponseDto {
     private String id;
     private String debtorDni;
@@ -32,5 +32,7 @@ public class TransactionResponseDto {
     private OffsetDateTime date;
     private OffsetDateTime eventDate;
     private String description;
+    private double averageBalance;
+    private double totalAmount;
 
 }

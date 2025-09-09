@@ -1,17 +1,13 @@
 package com.enoc.transaction.service;
 
-import com.enoc.transaction.application.internal.TransactionDomainService;
 import com.enoc.transaction.domain.model.Transaction;
-import com.enoc.transaction.domain.model.enums.StatusEnum;
-import com.enoc.transaction.domain.model.enums.TransactionOrigin;
 import com.enoc.transaction.domain.model.enums.TransactionState;
 import com.enoc.transaction.domain.model.enums.TransactionType;
-import com.enoc.transaction.domain.service.TransactionValidator;
+import com.enoc.transaction.domain.repository.TransactionRepository;
 import com.enoc.transaction.dto.request.TransactionRequestDTO;
 import com.enoc.transaction.dto.response.TransactionResponseDto;
-import com.enoc.transaction.infrastructure.persistence.TransactionRepository;
+import com.enoc.transaction.infrastructure.mapper.TransactionMapper;
 import com.enoc.transaction.infrastructure.service.TransactionServiceImpl;
-import com.enoc.transaction.mapper.TransactionMapper;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -24,7 +20,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 
@@ -38,167 +35,248 @@ class TransactionServiceImplTest {
     private TransactionMapper mapper;
 
     @InjectMocks
-    private TransactionServiceImpl service;
+    private TransactionServiceImpl transactionService;
 
-    @Mock
-    private TransactionValidator validator;
-
-    @Mock
-    private TransactionDomainService transactionDomainService;
+    private TransactionRequestDTO requestDto;
 
     @BeforeEach
     void setUp() {
-        service = new TransactionServiceImpl(repository, mapper, validator, transactionDomainService);
+        requestDto = new TransactionRequestDTO();
+        requestDto.setAmount(BigDecimal.valueOf(200));
+        requestDto.setCardId("CARD123");
+        requestDto.setCustomerId("CUSTOMER123");
     }
 
-
+    // Test for the 'create' method
     @Test
-    void createShouldApplyCommissionWhenLimitExceeded() {
-        TransactionRequestDTO request = TransactionRequestDTO.builder()
-                .customerId("cust123")
-                .productId("prod456")
-                .accountId("acc789")
-                .operationTypeId("op001")
-                .destinationAccountId("dest002")
-                .type(TransactionType.DEPOSIT)
-                .origin(TransactionOrigin.DEBIT_CARD)
-                .status(StatusEnum.PENDING)
-                .amount(new BigDecimal("100.00"))
-                .commissionApplied(BigDecimal.ZERO)
-                .date(OffsetDateTime.now())
-                .eventDate(OffsetDateTime.now())
-                .description("Test deposit")
-                .build();
-
-        Transaction entity = new Transaction();
-        entity.setAccountId("acc789");
-        entity.setAmount(new BigDecimal("100.00"));
-        entity.setType(TransactionType.DEPOSIT);
-        entity.setCommissionApplied(new BigDecimal("2.50"));
-
-        TransactionResponseDto responseDto = TransactionResponseDto.builder()
-                .accountId("acc789")
-                .amount(new BigDecimal("100.00"))
-                .type(TransactionType.DEPOSIT)
-                .commissionApplied(new BigDecimal("2.50"))
-                .description("Test deposit")
-                .build();
-
-        // Act
-        when(repository.countByAccountIdAndTypeIn(anyString(), anyList())).thenReturn(Mono.just(6L));
-        when(mapper.mapToEntity(request)).thenReturn(entity);
-        when(repository.save(entity)).thenReturn(Mono.just(entity));
-        when(validator.validarMontoPositivo(any(TransactionRequestDTO.class)))
-                .thenReturn(Mono.empty());
-        when(mapper.toDto(entity)).thenReturn(responseDto);
-
-        // Assert
-        StepVerifier.create(service.create(request))
-                .expectNextMatches(dto -> dto.getCommissionApplied().compareTo(new BigDecimal("2.50")) == 0)
-                .verifyComplete();
-
-    }
-
-    @Test
-    void findAllShouldReturnMappedTransactions() {
-        Transaction t1 = new Transaction();
-        t1.setAccountId("acc001");
-        t1.setAmount(new BigDecimal("50.00"));
-        t1.setType(TransactionType.PAYMENT);
-
-        TransactionResponseDto dto1 = TransactionResponseDto.builder()
-                .accountId("acc001")
-                .amount(new BigDecimal("50.00"))
-                .type(TransactionType.PAYMENT)
-                .build();
-
-        when(repository.findAll()).thenReturn(Flux.just(t1));
-        when(mapper.toDto(t1)).thenReturn(dto1);
-
-        StepVerifier.create(service.findAll())
-                .expectNext(dto1)
-                .verifyComplete();
-    }
-
-    @Test
-    void findByIdShouldReturnDtoIfExists() {
-        Transaction t = new Transaction();
-        t.setAccountId("acc002");
-        t.setAmount(new BigDecimal("75.00"));
-        t.setType(TransactionType.CREDIT_CHARGE);
-
-        TransactionResponseDto dto = TransactionResponseDto.builder()
-                .accountId("acc002")
-                .amount(new BigDecimal("75.00"))
-                .type(TransactionType.CREDIT_CHARGE)
-                .build();
-
-        when(repository.findById("123")).thenReturn(Mono.just(t));
-        when(mapper.toDto(t)).thenReturn(dto);
-
-        StepVerifier.create(service.findById("123"))
-                .expectNext(dto)
-                .verifyComplete();
-    }
-
-    @Test
-    void updateShouldModifyAndReturnUpdatedTransaction() {
-        Transaction existing = new Transaction();
-        existing.setId("123");
-        existing.setAccountId("acc003");
-        existing.setAmount(new BigDecimal("20.00"));
-        existing.setType(TransactionType.DEPOSIT);
-
-        TransactionRequestDTO request = TransactionRequestDTO.builder()
-                .amount(new BigDecimal("30.00"))
-                .date(OffsetDateTime.now())
-                .description("Updated transaction")
-                .build();
-
-        TransactionResponseDto dto = TransactionResponseDto.builder()
-                .accountId("acc003")
-                .amount(new BigDecimal("30.00"))
-                .type(TransactionType.TRANSFER_INTERNAL)
-                .description("Updated transaction")
-                .build();
-
-        when(repository.findById("123")).thenReturn(Mono.just(existing));
-        when(repository.save(any())).thenReturn(Mono.just(existing));
-        when(mapper.toDto(existing)).thenReturn(dto);
-
-        StepVerifier.create(service.update("123", request))
-                .expectNext(dto)
-                .verifyComplete();
-    }
-
-    @Test
-    void deleteShouldCompleteSuccessfully() throws Exception {
+    void createShouldReturnTransactionResponse() {
+        // Arrange: Configura la transacción simulada
         Transaction transaction = new Transaction();
-        transaction.setId("123");
-        transaction.setState(TransactionState.ACTIVE);
+        transaction.setAmount(BigDecimal.valueOf(100));
 
-        Transaction updated = new Transaction();
-        updated.setId("123");
-        updated.setState(TransactionState.INACTIVE);
+        // Configura el comportamiento esperado de los mocks
+        when(repository.save(any(Transaction.class))).thenReturn(Mono.just(transaction));
+        when(mapper.toDto(any(Transaction.class))).thenReturn(TransactionResponseDto.builder().amount(BigDecimal.valueOf(100)).build());
 
-        when(repository.findByIdAndState("123", TransactionState.ACTIVE)).thenReturn(Mono.just(transaction));
-        when(repository.save(any(Transaction.class))).thenReturn(Mono.just(updated));
-        when(mapper.toDto(updated)).thenReturn(new TransactionResponseDto()); // puedes mockear campos si lo deseas
+        // Act: Llamar al método del servicio
+        Mono<TransactionResponseDto> response = transactionService.create(requestDto);
 
-        StepVerifier.create(service.deleteTransactionByLogicalState("123"))
-                .expectNextMatches(dto -> dto != null) // o validar campos específicos
+        // Assert: Verificar la respuesta
+        StepVerifier.create(response)
+                .expectNextMatches(transactionResponseDto -> transactionResponseDto.getAmount().equals(BigDecimal.valueOf(100)))  // Verifica el monto esperado
+                .verifyComplete();  // Verifica que la secuencia se haya completado correctamente
+    }
+
+    // Test for the 'processOrderedDebitWithdrawal' method
+    @Test
+    void processOrderedDebitWithdrawalShouldReturnTransaction() {
+        // Arrange: Configuración del DTO de la solicitud y la respuesta esperada
+        TransactionRequestDTO requestDto = new TransactionRequestDTO();
+        requestDto.setAmount(BigDecimal.valueOf(200));  // Monto solicitado
+        requestDto.setCardId("CARD123");
+        requestDto.setCustomerId("CUSTOMER123");
+
+        // Configurar la transacción simulada
+        Transaction transaction = new Transaction();
+        transaction.setAmount(BigDecimal.valueOf(200));  // Transacción con suficiente saldo
+
+        // Mock de repositorio: findByCardIdAndStateOrderByCreatedAtDesc (ahora devuelve Flux<Transaction>)
+        when(repository.findByCardIdAndStateOrderByCreatedAtDesc(any(), eq(TransactionState.ACTIVE)))
+                .thenReturn(Flux.just(transaction));  // Devuelve un Flux con la transacción simulada
+
+        // Mock de la transacción guardada
+        when(repository.save(any(Transaction.class)))
+                .thenReturn(Mono.just(transaction));  // Simula el guardado de la transacción
+
+        // Mock del mapeo a DTO
+        when(mapper.toDto(any(Transaction.class)))
+                .thenReturn(TransactionResponseDto.builder().amount(BigDecimal.valueOf(200)).build());  // Devuelve el DTO con el monto
+
+        // Act: Llamar al servicio
+        Mono<TransactionResponseDto> response = transactionService.processOrderedDebitWithdrawal(requestDto);
+
+        // Assert: Verificar la respuesta
+        StepVerifier.create(response)
+                .expectNextMatches(transactionResponseDto -> transactionResponseDto
+                        .getAmount().equals(BigDecimal.valueOf(200)))  // Verificar el monto
+                .verifyComplete();  // Verificar que la secuencia se complete correctamente
+    }
+
+
+    // Test for the 'payThirdPartyCreditProduct' method
+    @Test
+    void payThirdPartyCreditProductShouldReturnTransaction() {
+        Transaction transaction = new Transaction();
+        transaction.setAmount(BigDecimal.valueOf(100));
+
+        when(repository.save(any(Transaction.class))).thenReturn(Mono.just(transaction));
+        when(mapper.toDto(any(Transaction.class))).thenReturn(TransactionResponseDto.builder().amount(BigDecimal.valueOf(100)).build());
+
+        Mono<TransactionResponseDto> response = transactionService.payThirdPartyCreditProduct(requestDto);
+
+        StepVerifier.create(response)
+                .expectNextMatches(transactionResponseDto -> transactionResponseDto.getAmount().equals(BigDecimal.valueOf(100)))
+                .verifyComplete();
+    }
+
+    // Test for the 'getLastTransaction' method
+    @Test
+    void getLastTransactionShouldReturnTransaction() {
+        Transaction transaction = new Transaction();
+        transaction.setAmount(BigDecimal.valueOf(100));
+        when(repository.findTopByCustomerIdAndStateOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(Mono.just(transaction));
+        when(mapper.toDto(any(Transaction.class))).thenReturn(TransactionResponseDto.builder().amount(BigDecimal.valueOf(100)).build());
+
+        Mono<TransactionResponseDto> response = transactionService.getLastTransaction("CUSTOMER123");
+
+        StepVerifier.create(response)
+                .expectNextMatches(transactionResponseDto -> transactionResponseDto.getAmount().equals(BigDecimal.valueOf(100)))
+                .verifyComplete();
+    }
+
+    // Test for the 'getTransactionsByDateRange' method
+    @Test
+    void getTransactionsByDateRangeShouldReturnTransactions() {
+        // Arrange: Preparar fechas de prueba usando OffsetDateTime
+        OffsetDateTime startDate = OffsetDateTime.now().minusDays(10); // 10 días atrás
+        OffsetDateTime endDate = OffsetDateTime.now();  // Fecha actual
+
+        // Crear respuestas de transacción de prueba
+        TransactionResponseDto tx1 = TransactionResponseDto.builder()
+                .id("1")
+                .amount(BigDecimal.valueOf(100))
+                .date(OffsetDateTime.now().minusDays(5))  // Fecha dentro del rango
+                .build();
+
+        TransactionResponseDto tx2 = TransactionResponseDto.builder()
+                .id("2")
+                .amount(BigDecimal.valueOf(200))
+                .date(OffsetDateTime.now().minusDays(3))  // Fecha dentro del rango
+                .build();
+
+        // Mock de la respuesta del servicio
+        when(transactionService.getTransactionsByDateRange(startDate, endDate))
+                .thenReturn(Flux.just(tx1, tx2));
+
+        // Act: Llamar al método de servicio
+        Flux<TransactionResponseDto> response = transactionService.getTransactionsByDateRange(startDate, endDate);
+
+        // Assert: Verificar la respuesta
+        StepVerifier.create(response)
+                .expectNext(tx1)
+                .expectNext(tx2)
+                .verifyComplete();
+    }
+
+
+    // Test for the 'countByAccountIdAndTypeIn' method
+    @Test
+    void countByAccountIdAndTypeInShouldReturnTransactionCount() {
+        String accountId = "ACCOUNT123";
+        List<TransactionType> types = List.of(TransactionType.TRANSFER_INTERNAL, TransactionType.TRANSFER_EXTERNAL);
+        Long expectedCount = 10L;
+
+        when(repository.countByAccountIdAndTypeIn(accountId, List.of("TRANSFER_INTERNAL", "TRANSFER_EXTERNAL")))
+                .thenReturn(Mono.just(expectedCount));
+
+        Mono<Long> response = transactionService.countByAccountIdAndTypeIn(accountId, types);
+
+        StepVerifier.create(response)
+                .expectNext(expectedCount)
                 .verifyComplete();
     }
 
     @Test
-    void countByAccountIdAndTypeInShouldReturnCount() {
-        when(repository.countByAccountIdAndTypeIn("acc123", List.of("DEPOSIT", "WITHDRAWAL")))
-                .thenReturn(Mono.just(3L));
+    void getTransactionsByCustomerIdShouldReturnTransactions() {
+        // Arrange: Configura los datos de prueba
+        String customerId = "CUSTOMER123";
+        Transaction tx1 = new Transaction();
+        tx1.setId("1");
+        tx1.setAmount(BigDecimal.valueOf(100));
+        tx1.setState(TransactionState.ACTIVE);
 
-        StepVerifier.create(service.countByAccountIdAndTypeIn("acc123", List.of(TransactionType.DEPOSIT, TransactionType.WITHDRAWAL)))
-                .expectNext(3L)
+        Transaction tx2 = new Transaction();
+        tx2.setId("2");
+        tx2.setAmount(BigDecimal.valueOf(200));
+        tx2.setState(TransactionState.ACTIVE);
+
+        // Simula la respuesta del repositorio
+        when(repository.findByCustomerIdAndState(customerId, TransactionState.ACTIVE))
+                .thenReturn(Flux.just(tx1, tx2));  // Devuelve un Flux<Transaction> del repositorio.
+
+        // Simula el mapeo de las transacciones a DTO
+        when(mapper.toDto(tx1)).thenReturn(TransactionResponseDto.builder().id("1").amount(BigDecimal.valueOf(100)).build());
+        when(mapper.toDto(tx2)).thenReturn(TransactionResponseDto.builder().id("2").amount(BigDecimal.valueOf(200)).build());
+
+        // Act: Llamar al método del servicio
+        Flux<TransactionResponseDto> response = transactionService.getTransactionsByCustomerId(customerId);
+
+        // Assert: Verificar la respuesta
+        StepVerifier.create(response)
+                .expectNextMatches(transactionResponseDto -> transactionResponseDto.getId().equals("1")
+                        && transactionResponseDto.getAmount().equals(BigDecimal.valueOf(100)))
+                .expectNextMatches(transactionResponseDto -> transactionResponseDto.getId().equals("2")
+                        && transactionResponseDto.getAmount().equals(BigDecimal.valueOf(200)))
+                .verifyComplete();  // Verifica que la secuencia se haya completado.
+    }
+
+    @Test
+    void getTransactionsByProductIdShouldReturnTransactions() {
+        String productId = "PRODUCT123";
+
+        // Crear instancias de Transaction
+        Transaction tx1 = new Transaction();
+        tx1.setId("1");
+        tx1.setAmount(BigDecimal.valueOf(100));
+        tx1.setProductId(productId);
+        tx1.setState(TransactionState.ACTIVE);
+
+        Transaction tx2 = new Transaction();
+        tx2.setId("2");
+        tx2.setAmount(BigDecimal.valueOf(200));
+        tx2.setProductId(productId);
+        tx2.setState(TransactionState.ACTIVE);
+
+        // Simular la respuesta del repositorio (devuelve Flux<Transaction>)
+        when(repository.findByProductIdAndState(productId, TransactionState.ACTIVE))
+                .thenReturn(Flux.just(tx1, tx2));
+
+        // Simular el mapeo a DTO
+        when(mapper.toDto(tx1)).thenReturn(TransactionResponseDto.builder().id("1").amount(BigDecimal.valueOf(100)).build());
+        when(mapper.toDto(tx2)).thenReturn(TransactionResponseDto.builder().id("2").amount(BigDecimal.valueOf(200)).build());
+
+        // Act: Llamar al método del servicio
+        Flux<TransactionResponseDto> response = transactionService.getTransactionsByProductId(productId);
+
+        // Assert: Verificar la respuesta
+        StepVerifier.create(response)
+                .expectNextMatches(transactionResponseDto -> transactionResponseDto.getId().equals("1")
+                        && transactionResponseDto.getAmount().equals(BigDecimal.valueOf(100)))
+                .expectNextMatches(transactionResponseDto -> transactionResponseDto.getId().equals("2")
+                        && transactionResponseDto.getAmount().equals(BigDecimal.valueOf(200)))
                 .verifyComplete();
     }
 
 
+    // Test for the 'generateCustomerBalanceReport' method
+    @Test
+    void generateCustomerBalanceReportShouldReturnReport() {
+        OffsetDateTime startDate = OffsetDateTime.now().minusDays(10); // 10 days ago
+        OffsetDateTime endDate = OffsetDateTime.now();  // Current date
+        String customerId = "CUSTOMER123";
+
+        TransactionResponseDto report = new TransactionResponseDto();
+        report.setTotalAmount(1000.0);
+        report.setAverageBalance(100.0);
+
+        when(repository.findByCustomerIdAndStateAndCreatedAtBetween(customerId, TransactionState.ACTIVE, startDate, endDate))
+                .thenReturn(Flux.just(new Transaction())); // Simulate transactions in the date range
+
+        Mono<TransactionResponseDto> response = transactionService.generateCustomerBalanceReport(customerId, startDate, endDate);
+
+        StepVerifier.create(response)
+                .expectNext(report)
+                .verifyComplete();
+    }
 }

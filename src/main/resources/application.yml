@@ -10,6 +10,9 @@ spring:
 server:
   port: 8082
 
+transaction:
+  free-limit: 5  # Establece el límite de transacciones gratuitas
+
 logging:
   level:
     org.springframework: INFO

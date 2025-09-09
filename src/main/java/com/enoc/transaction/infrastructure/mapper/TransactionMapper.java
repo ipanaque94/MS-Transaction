@@ -1,4 +1,4 @@
-package com.enoc.transaction.mapper;
+package com.enoc.transaction.infrastructure.mapper;
 
 import com.enoc.transaction.domain.model.Transaction;
 import com.enoc.transaction.dto.request.TransactionRequestDTO;

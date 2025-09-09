@@ -1,4 +1,4 @@
-package com.enoc.transaction.api;
+package com.enoc.transaction.infrastructure.api;
 
 import com.enoc.transaction.dto.request.TransactionRequestDTO;
 import com.enoc.transaction.dto.response.TransactionResponseDto;

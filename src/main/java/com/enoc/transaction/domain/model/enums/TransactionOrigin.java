@@ -4,7 +4,8 @@ public enum TransactionOrigin {
     ATM,              // Desde cajero automático
     MOBILE_APP,       // Desde app móvil
     WEB_PORTAL,       // Desde portal web
-    DEBIT_CARD        // Desde terminal de tarjeta
+    DEBIT_CARD,       // Desde terminal de tarjeta
+    CREDIT;          // Desde producto de crédito (nuevo valor añadido)
 
 
 }

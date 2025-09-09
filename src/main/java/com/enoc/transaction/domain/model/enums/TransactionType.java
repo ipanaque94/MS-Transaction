@@ -8,12 +8,9 @@ public enum TransactionType {
     CREDIT_PAYMENT,       // Abono a crédito
     TRANSFER_INTERNAL,    // Entre cuentas propias
     TRANSFER_EXTERNAL,    // A terceros
-    DEBIT_CARD_CHARGE,// Cargo con tarjeta de débito
-    DEBIT_WITHDRAWAL,
-    DEBIT_CARD_PAYMENT;   // Pago con tarjeta de débito
-
-    public boolean isCommissionable() {
-        return this == DEPOSIT || this == WITHDRAWAL;
-    }
-
+    DEBIT_CARD_CHARGE,    // Cargo con tarjeta de débito
+    DEBIT_WITHDRAWAL,     //retiro de la debit card
+    DEBIT_CARD_PAYMENT;   // pago con tarjeta de debito
 }
+
+

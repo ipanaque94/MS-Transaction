@@ -1,4 +1,4 @@
-package com.enoc.transaction.exception.business;
+package com.enoc.transaction.domain.exception;
 
 public class BusinessException extends RuntimeException {
     public BusinessException(String message) {
