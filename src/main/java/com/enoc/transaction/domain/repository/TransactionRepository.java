@@ -4,7 +4,6 @@ package com.enoc.transaction.domain.repository;
 import com.enoc.transaction.domain.model.Transaction;
 import com.enoc.transaction.domain.model.enums.TransactionState;
 import com.enoc.transaction.domain.model.enums.TransactionType;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.data.mongodb.repository.ReactiveMongoRepository;
@@ -25,8 +24,8 @@ public interface TransactionRepository extends ReactiveMongoRepository<Transacti
 
     // Method to check if there is an overdue credit transaction for a customer with a specific product.
     // Método para verificar si existe una transacción de crédito vencida para un cliente con un producto específico.
-    Mono<Boolean> existsByCustomerIdAndTypeAndDueDateBeforeAndState(String customerId, TransactionType type, LocalDate date,
-                                                                    TransactionState state
+    Mono<Boolean> existsByCustomerIdAndTypeAndDateBeforeAndState(String customerId, TransactionType type, OffsetDateTime date,
+                                                                 TransactionState state
     );
 
     // Custom method to get transactions by card ID and state, ordered by creation date.

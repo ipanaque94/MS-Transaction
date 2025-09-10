@@ -13,10 +13,12 @@ import com.enoc.transaction.dto.request.TransactionRequestDTO;
 import com.enoc.transaction.dto.response.TransactionResponseDto;
 import com.enoc.transaction.infrastructure.mapper.TransactionMapper;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import javassist.NotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -43,22 +45,170 @@ public class TransactionServiceImpl implements TransactionService {
      */
     @Override
     public Mono<TransactionResponseDto> create(TransactionRequestDTO request) {
-        // Validar si el monto es positivo
+        switch (request.getType()) {
+            case DEPOSIT:
+                return createDeposit(request);
+            case WITHDRAWAL:
+                return createWithdrawal(request);
+            case CREDIT_CHARGE:
+                return createCreditCharge(request);
+            case CREDIT_PAYMENT:
+                return createCreditPayment(request);
+            case TRANSFER_INTERNAL:
+                return createInternalTransfer(request);
+            case TRANSFER_EXTERNAL:
+                return createExternalTransfer(request);
+            case DEBIT_CARD_CHARGE:
+                return createDebitCardCharge(request);
+            case DEBIT_CARD_PAYMENT:
+                return createDebitCardPayment(request);
+            case DEBIT_WITHDRAWAL:
+                return createDebitWithdrawalOrdered(request);
+            default:
+                return Mono.error(new IllegalArgumentException("Tipo de transacción no soportado"));
+        }
+    }
+
+    @Override
+    public Mono<TransactionResponseDto> createDeposit(TransactionRequestDTO request) {
         return validator.validarMontoPositivo(request)
-                .then(validator.validarMontoMaximo(request, new BigDecimal("10000")))
-                .flatMap(valid -> {
-                    // Verificar si el cliente tiene deudas vencidas
-                    return hasOverdueCreditTransactions(request.getCustomerId())
-                            .flatMap(hasDebt -> {
-                                if (hasDebt) {
-                                    return Mono.error(new IllegalArgumentException("Customer has overdue debts"));
-                                }
-                                Transaction entity = mapper.mapToEntity(request);
-                                return repository.save(entity)
-                                        .map(mapper::toDto);
-                            });
+                .then(hasOverdueCreditTransactions(request.getCustomerId()))
+                .flatMap(hasDebt -> {
+                    if (hasDebt) {
+                        return Mono.error(new IllegalArgumentException("Cliente tiene deudas vencidas"));
+                    }
+                    Transaction tx = mapper.mapToEntity(request);
+                    tx.setType(TransactionType.DEPOSIT);
+                    tx.setState(TransactionState.ACTIVE);
+                    tx.setCreatedAt(OffsetDateTime.now());
+                    return repository.save(tx).map(mapper::toDto);
                 });
     }
+
+
+    @Override
+    public Mono<TransactionResponseDto> createWithdrawal(TransactionRequestDTO request) {
+        return validator.validarMontoPositivo(request)
+                .then(hasOverdueCreditTransactions(request.getCustomerId()))
+                .flatMap(hasDebt -> {
+                    if (hasDebt) {
+                        return Mono.error(new IllegalArgumentException("Cliente tiene deudas vencidas"));
+                    }
+                    Transaction tx = mapper.mapToEntity(request);
+                    tx.setType(TransactionType.WITHDRAWAL);
+                    tx.setAmount(request.getAmount().negate());
+                    tx.setState(TransactionState.ACTIVE);
+                    tx.setCreatedAt(OffsetDateTime.now());
+                    return repository.save(tx).map(mapper::toDto);
+                });
+    }
+
+
+    @Override
+    public Mono<TransactionResponseDto> createCreditCharge(TransactionRequestDTO request) {
+        Transaction tx = mapper.mapToEntity(request);
+        tx.setType(TransactionType.CREDIT_CHARGE);
+        tx.setState(TransactionState.ACTIVE);
+        tx.setCreatedAt(OffsetDateTime.now());
+        return repository.save(tx).map(mapper::toDto);
+    }
+
+
+    @Override
+    public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO request) {
+        return hasOverdueCreditTransactions(request.getCustomerId())
+                .flatMap(hasDebt -> {
+                    if (!hasDebt) {
+                        return Mono.error(new IllegalArgumentException("No hay deuda vencida para pagar"));
+                    }
+                    Transaction tx = mapper.mapToEntity(request);
+                    tx.setType(TransactionType.CREDIT_PAYMENT);
+                    tx.setState(TransactionState.ACTIVE);
+                    tx.setCreatedAt(OffsetDateTime.now());
+                    return repository.save(tx).map(mapper::toDto);
+                });
+    }
+
+
+    @Override
+    public Mono<TransactionResponseDto> createInternalTransfer(TransactionRequestDTO request) {
+        Transaction tx = mapper.mapToEntity(request);
+        tx.setType(TransactionType.TRANSFER_INTERNAL);
+        tx.setState(TransactionState.ACTIVE);
+        tx.setCreatedAt(OffsetDateTime.now());
+        return repository.save(tx).map(mapper::toDto);
+    }
+
+
+    @Override
+    public Mono<TransactionResponseDto> createExternalTransfer(TransactionRequestDTO request) {
+        Transaction tx = mapper.mapToEntity(request);
+        tx.setType(TransactionType.TRANSFER_EXTERNAL);
+        tx.setState(TransactionState.ACTIVE);
+        tx.setCreatedAt(OffsetDateTime.now());
+        return repository.save(tx).map(mapper::toDto);
+    }
+
+
+    @Override
+    public Mono<TransactionResponseDto> createDebitCardCharge(TransactionRequestDTO request) {
+        Transaction tx = mapper.mapToEntity(request);
+        tx.setType(TransactionType.DEBIT_CARD_CHARGE);
+        tx.setOrigin(TransactionOrigin.DEBIT_CARD);
+        tx.setState(TransactionState.ACTIVE);
+        tx.setCreatedAt(OffsetDateTime.now());
+        return repository.save(tx).map(mapper::toDto);
+    }
+
+
+    @Override
+    public Mono<TransactionResponseDto> createDebitCardPayment(TransactionRequestDTO request) {
+        return Mono.when(
+                validator.validarMontoPositivo(request),
+                validator.validarMontoMaximo(request, new BigDecimal("10000"))
+        ).then(Mono.defer(() -> {
+            Transaction tx = mapper.mapToEntity(request);
+            tx.setType(TransactionType.DEBIT_CARD_PAYMENT);
+            tx.setOrigin(TransactionOrigin.DEBIT_CARD);
+            tx.setState(TransactionState.ACTIVE);
+            tx.setCreatedAt(OffsetDateTime.now());
+            return repository.save(tx).map(mapper::toDto);
+        }));
+    }
+
+
+    @Override
+    public Mono<TransactionResponseDto> createDebitWithdrawalOrdered(TransactionRequestDTO request) {
+        return repository.findByCardIdAndStateOrderByCreatedAtDesc(request.getCardId(), TransactionState.ACTIVE)
+                .collectList()
+                .flatMap(transactions -> {
+                    // Agrupar por accountId y calcular saldo acumulado
+                    Map<String, BigDecimal> saldos = new LinkedHashMap<>();
+                    for (Transaction tx : transactions) {
+                        saldos.merge(tx.getAccountId(), tx.getAmount(), BigDecimal::add);
+                    }
+
+                    // Buscar la primera cuenta con saldo suficiente
+                    Optional<Map.Entry<String, BigDecimal>> cuentaValida = saldos.entrySet().stream()
+                            .filter(entry -> entry.getValue().compareTo(request.getAmount()) >= 0)
+                            .findFirst();
+
+                    if (cuentaValida.isEmpty()) {
+                        return Mono.error(new BusinessException("Saldo insuficiente en cuentas asociadas"));
+                    }
+
+                    // Crear la transacción de retiro
+                    Transaction tx = mapper.mapToEntity(request);
+                    tx.setAccountId(cuentaValida.get().getKey());
+                    tx.setAmount(request.getAmount().negate());
+                    tx.setType(TransactionType.DEBIT_WITHDRAWAL);
+                    tx.setState(TransactionState.ACTIVE);
+                    tx.setCreatedAt(OffsetDateTime.now());
+
+                    return repository.save(tx).map(mapper::toDto);
+                });
+    }
+
 
     /*
       Method to get all transactions.
@@ -122,13 +272,34 @@ public class TransactionServiceImpl implements TransactionService {
      */
     @Override
     public Mono<Boolean> hasOverdueCreditTransactions(String customerId) {
-        return repository.existsByCustomerIdAndTypeAndDueDateBeforeAndState(
+        return repository.existsByCustomerIdAndTypeAndDateBeforeAndState(
                 customerId,
                 TransactionType.CREDIT_CHARGE,
-                LocalDate.now(),
+                OffsetDateTime.now(),
                 TransactionState.ACTIVE
         );
     }
+
+    @Override
+    public Mono<Boolean> validateVipEligibility(String customerId) {
+        return repository.existsByCustomerIdAndTypeAndDateBeforeAndState(
+                customerId,
+                TransactionType.CREDIT_CHARGE,
+                OffsetDateTime.now(),
+                TransactionState.ACTIVE
+        ).map(hasDebt -> !hasDebt); // Debe no tener deuda
+    }
+
+    @Override
+    public Mono<Boolean> validatePymeEligibility(String customerId) {
+        return repository.existsByCustomerIdAndTypeAndDateBeforeAndState(
+                customerId,
+                TransactionType.CREDIT_CHARGE,
+                OffsetDateTime.now(),
+                TransactionState.ACTIVE
+        ).map(hasDebt -> !hasDebt); // Debe no tener deuda
+    }
+
 
     /*
       Method to pay a third-party credit product.
@@ -243,6 +414,7 @@ public class TransactionServiceImpl implements TransactionService {
                 })
                 .map(mapper::toDto);
     }
+
 
     /*
       Method to get transactions by customer ID.

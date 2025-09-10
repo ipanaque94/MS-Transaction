@@ -12,6 +12,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 @Getter
 @Setter
@@ -36,6 +37,8 @@ public class Transaction {
     private TransactionState state = TransactionState.ACTIVE;
     private BigDecimal amount;
     private BigDecimal commissionApplied;
+
+    @Field("date")
     private OffsetDateTime date;
     private String description;
     private StatusEnum status;
