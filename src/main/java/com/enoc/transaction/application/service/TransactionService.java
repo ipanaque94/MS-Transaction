@@ -39,9 +39,9 @@ public interface TransactionService {
     // Validaciones de negocio
     Mono<Boolean> hasOverdueCreditTransactions(String customerId);
 
-    Mono<Boolean> validateVipEligibility(String customerId);
+    //Mono<Boolean> validateVipEligibility(String customerId);
 
-    Mono<Boolean> validatePymeEligibility(String customerId);
+    //Mono<Boolean> validatePymeEligibility(String customerId);
 
     // Cálculo de comisión
     Mono<Double> calculateTransactionFee(String accountId, TransactionType type);
@@ -75,12 +75,9 @@ public interface TransactionService {
 
     // Reportes especializados
     Mono<TransactionResponseDto> generateCustomerBalanceReport(String customerId, OffsetDateTime startDateTime, OffsetDateTime endDateTime);
-    //Mono<CustomerConsolidatedReportDto> generateCustomerProductSummary(String customerId);
-    //Mono<DailyAverageBalanceReportDto> generateMonthlyAverageBalance(String customerId);
-    //Flux<ProductTransactionReportDto> generateProductReportByDateRange(OffsetDateTime start, OffsetDateTime end);
 
     // Últimos movimientos
-    Flux<TransactionResponseDto> getLast10CardTransactions(String customerId);
+    //Flux<TransactionResponseDto> getLast10CardTransactions(String customerId);
 }
 
 

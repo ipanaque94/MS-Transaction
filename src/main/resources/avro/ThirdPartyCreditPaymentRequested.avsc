@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "ThirdPartyCreditPaymentRequested",
+  "namespace": "com.enoc.transaction.events",
+  "doc": "Evento que solicita el pago de un producto de crédito de un tercero.",
+  "fields": [
+    { "name": "paymentId", "type": "string", "doc": "Identificador único del pago." },
+    { "name": "customerId", "type": "string", "doc": "ID del cliente que realiza el pago." },
+    { "name": "thirdPartyProductId", "type": "string", "doc": "ID del producto de crédito externo." },
+    { "name": "providerName", "type": "string", "doc": "Nombre del proveedor externo." },
+    { "name": "amount", "type": "double", "doc": "Monto del pago." },
+    { "name": "timestamp", "type": "string", "doc": "Fecha y hora del evento en formato ISO." }
+  ]
+}

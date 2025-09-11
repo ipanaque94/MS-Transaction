@@ -1,18 +1,78 @@
+server:
+  port: 8181
+
 spring:
   application:
     name: transaction-service
+
   cloud:
     config:
       enabled: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKER:kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      properties:
+        schema.registry.url: http://schema-registry:8081
+    consumer:
+      group-id: transaction-consumer-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+      properties:
+        schema.registry.url: http://schema-registry:8081
+        specific.avro.reader: true
+
+
   data:
     mongodb:
       uri: mongodb://localhost:27017/transactiondb
-server:
-  port: 8082
 
-transaction:
-  free-limit: 5  # Establece el límite de transacciones gratuitas
+    redis:
+      host: localhost
+      port: 6379
+kafka:
+  topics:
+    credit-payment-requested: credit.payment.requested
+    external-transfer-requested: external.transfer.requested
+    debit-card-payment-requested: debit.card.payment.requested
+    ordered-debit-withdrawal-requested: ordered.debit.withdrawal.requested
+    third-party-credit-payment-requested: third.party.credit.payment.requested
+    transaction-created: transaction.created
+
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      transactionCircuitBreaker:
+        failureRateThreshold: 50
+        slidingWindowSize: 100
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 10
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  timelimiter:
+    instances:
+      transactionCircuitBreaker:
+        timeoutDuration: 2s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
 
 logging:
   level:
-    org.springframework: INFO
+    root: INFO
+    org.springframework.web: INFO
+    com.enoc.transaction: DEBUG

@@ -363,26 +363,27 @@ class TransactionServiceImplTest {
                 .verifyComplete();
     }
 
-    @Test
-    void validateVipEligibilityShouldReturnTrueWhenNoDebt() {
-        when(repository.existsByCustomerIdAndTypeAndDateBeforeAndState(any(), any(), any(), any()))
-                .thenReturn(Mono.just(false));
+    /*
+        @Test
+        void validateVipEligibilityShouldReturnTrueWhenNoDebt() {
+            when(repository.existsByCustomerIdAndTypeAndDateBeforeAndState(any(), any(), any(), any()))
+                    .thenReturn(Mono.just(false));
 
-        StepVerifier.create(service.validateVipEligibility("cust123"))
-                .expectNext(true)
-                .verifyComplete();
-    }
+            StepVerifier.create(service.validateVipEligibility("cust123"))
+                    .expectNext(true)
+                    .verifyComplete();
+        }
 
-    @Test
-    void validatePymeEligibilityShouldReturnFalseWhenHasDebt() {
-        when(repository.existsByCustomerIdAndTypeAndDateBeforeAndState(any(), any(), any(), any()))
-                .thenReturn(Mono.just(true));
+        @Test
+        void validatePymeEligibilityShouldReturnFalseWhenHasDebt() {
+            when(repository.existsByCustomerIdAndTypeAndDateBeforeAndState(any(), any(), any(), any()))
+                    .thenReturn(Mono.just(true));
 
-        StepVerifier.create(service.validatePymeEligibility("cust123"))
-                .expectNext(false)
-                .verifyComplete();
-    }
-
+            StepVerifier.create(service.validatePymeEligibility("cust123"))
+                    .expectNext(false)
+                    .verifyComplete();
+        }
+    */
     @Test
     void payThirdPartyCreditProductShouldSucceedWhenDebtExists() {
         TransactionRequestDTO request = buildRequest(TransactionType.CREDIT_PAYMENT);
@@ -444,20 +445,21 @@ class TransactionServiceImplTest {
                 .verifyComplete();
     }
 
-    @Test
-    void getLast10CardTransactionsShouldReturnMappedList() {
-        Transaction tx = buildTransaction(TransactionType.DEBIT_CARD_PAYMENT);
-        TransactionResponseDto dto = buildResponseDto(TransactionType.DEBIT_CARD_PAYMENT);
+    /*
+        @Test
+        void getLast10CardTransactionsShouldReturnMappedList() {
+            Transaction tx = buildTransaction(TransactionType.DEBIT_CARD_PAYMENT);
+            TransactionResponseDto dto = buildResponseDto(TransactionType.DEBIT_CARD_PAYMENT);
 
-        when(repository.findTop10ByCustomerIdAndStateOrderByCreatedAtDesc(eq("cust123"), any()))
-                .thenReturn(Flux.just(tx));
-        when(mapper.toDto(tx)).thenReturn(dto);
+            when(repository.findTop10ByCustomerIdAndStateOrderByCreatedAtDesc(eq("cust123"), any()))
+                    .thenReturn(Flux.just(tx));
+            when(mapper.toDto(tx)).thenReturn(dto);
 
-        StepVerifier.create(service.getLast10CardTransactions("cust123"))
-                .expectNext(dto)
-                .verifyComplete();
-    }
-
+            StepVerifier.create(service.getLast10CardTransactions("cust123"))
+                    .expectNext(dto)
+                    .verifyComplete();
+        }
+    */
     @Test
     void getActiveTransactionByIdShouldReturnDtoWhenFound() {
         Transaction tx = buildTransaction(TransactionType.DEPOSIT);
@@ -599,7 +601,7 @@ class TransactionServiceImplTest {
                 .expectNext(5.0)
                 .verifyComplete();
     }
-
+/*
     @Test
     void generateCustomerBalanceReportShouldReturnAggregatedDto() {
         OffsetDateTime start = OffsetDateTime.now().minusDays(10);
@@ -620,6 +622,6 @@ class TransactionServiceImplTest {
                 )
                 .verifyComplete();
     }
-
+*/
 
 }

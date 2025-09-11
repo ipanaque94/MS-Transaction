@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "OrderedDebitWithdrawalRequested",
+  "namespace": "com.enoc.transaction.events",
+  "doc": "Evento que solicita la ejecución de un retiro programado.",
+  "fields": [
+    { "name": "withdrawalId", "type": "string", "doc": "Identificador único del retiro." },
+    { "name": "customerId", "type": "string", "doc": "ID del cliente que solicita el retiro." },
+    { "name": "accountId", "type": "string", "doc": "Cuenta desde la cual se hará el retiro." },
+    { "name": "scheduledDate", "type": "string", "doc": "Fecha programada del retiro (ISO)." },
+    { "name": "amount", "type": "double", "doc": "Monto del retiro." },
+    { "name": "timestamp", "type": "string", "doc": "Fecha y hora del evento en formato ISO." }
+  ]
+}

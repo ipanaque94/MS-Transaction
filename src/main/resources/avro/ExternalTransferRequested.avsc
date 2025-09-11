@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "ExternalTransferRequested",
+  "namespace": "com.enoc.transaction.events",
+  "doc": "Evento que solicita una transferencia a una cuenta externa.",
+  "fields": [
+    { "name": "transferId", "type": "string", "doc": "Identificador único de la transferencia." },
+    { "name": "originAccountId", "type": "string", "doc": "Cuenta de origen." },
+    { "name": "destinationAccountNumber", "type": "string", "doc": "Número de cuenta destino." },
+    { "name": "bankCode", "type": "string", "doc": "Código del banco destino." },
+    { "name": "amount", "type": "double", "doc": "Monto a transferir." },
+    { "name": "timestamp", "type": "string", "doc": "Fecha y hora del evento en formato ISO." }
+  ]
+}

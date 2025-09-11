@@ -31,6 +31,9 @@ import reactor.core.publisher.Mono;
 @Service
 public class TransactionServiceImpl implements TransactionService {
 
+    //@Autowired
+    //private ReactiveCircuitBreakerFactory<?, ?> circuitBreakerFactory;
+
     @Value("${transaction.free-limit}")
     private int transactionLimit;
 
@@ -129,6 +132,26 @@ public class TransactionServiceImpl implements TransactionService {
                 });
     }
 
+    /* con circuit
+    @Override
+public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO request) {
+    return circuitBreakerFactory.create("customerCircuitBreaker")
+        .run(
+            customerClient.validatePaymentAuthorization(request.getCustomerId(), request.getProductId()),
+            throwable -> Mono.just(false)
+        )
+        .flatMap(isAuthorized -> {
+            if (!isAuthorized) {
+                return Mono.error(new BusinessException("Cliente no autorizado para pagar este producto"));
+            }
+            Transaction tx = mapper.mapToEntity(request);
+            tx.setType(TransactionType.CREDIT_PAYMENT);
+            tx.setState(TransactionState.ACTIVE);
+            tx.setCreatedAt(OffsetDateTime.now());
+            return repository.save(tx).map(mapper::toDto);
+        });
+}
+*/
 
     @Override
     public Mono<TransactionResponseDto> createInternalTransfer(TransactionRequestDTO request) {
@@ -148,7 +171,26 @@ public class TransactionServiceImpl implements TransactionService {
         tx.setCreatedAt(OffsetDateTime.now());
         return repository.save(tx).map(mapper::toDto);
     }
-
+/*
+    @Override
+    public Mono<TransactionResponseDto> createExternalTransfer(TransactionRequestDTO request) {
+        return circuitBreakerFactory.create("productCircuitBreaker")
+                .run(
+                        productClient.getProductById(request.getProductId()),
+                        throwable -> Mono.error(new BusinessException("product-service no respondió"))
+                )
+                .flatMap(product -> {
+                    if (!product.isActive()) {
+                        return Mono.error(new BusinessException("Producto destino inactivo"));
+                    }
+                    Transaction tx = mapper.mapToEntity(request);
+                    tx.setType(TransactionType.TRANSFER_EXTERNAL);
+                    tx.setState(TransactionState.ACTIVE);
+                    tx.setCreatedAt(OffsetDateTime.now());
+                    return repository.save(tx).map(mapper::toDto);
+                });
+    }
+*/
 
     @Override
     public Mono<TransactionResponseDto> createDebitCardCharge(TransactionRequestDTO request) {
@@ -279,7 +321,7 @@ public class TransactionServiceImpl implements TransactionService {
                 TransactionState.ACTIVE
         );
     }
-
+/*
     @Override
     public Mono<Boolean> validateVipEligibility(String customerId) {
         return repository.existsByCustomerIdAndTypeAndDateBeforeAndState(
@@ -299,7 +341,7 @@ public class TransactionServiceImpl implements TransactionService {
                 TransactionState.ACTIVE
         ).map(hasDebt -> !hasDebt); // Debe no tener deuda
     }
-
+*/
 
     /*
       Method to pay a third-party credit product.
@@ -325,6 +367,26 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     /*
+        @Override
+        public Mono<TransactionResponseDto> payThirdPartyCreditProduct(TransactionRequestDTO request) {
+            return circuitBreakerFactory.create("customerCircuitBreaker")
+                    .run(
+                            customerClient.validateThirdPartyPayment(request.getCustomerId(), request.getProductId()),
+                            throwable -> Mono.just(false)
+                    )
+                    .flatMap(isAuthorized -> {
+                        if (!isAuthorized) {
+                            return Mono.error(new BusinessException("Cliente no autorizado para pagar producto de terceros"));
+                        }
+                        Transaction tx = mapper.mapToEntity(request);
+                        tx.setType(TransactionType.CREDIT_PAYMENT);
+                        tx.setState(TransactionState.ACTIVE);
+                        tx.setCreatedAt(OffsetDateTime.now());
+                        return repository.save(tx).map(mapper::toDto);
+                    });
+        }
+    */
+    /*
       Method to process payment with debit card.
       Método para procesar el pago con tarjeta de débito.
      */
@@ -339,6 +401,28 @@ public class TransactionServiceImpl implements TransactionService {
         return repository.save(tx)
                 .map(mapper::toDto);
     }
+    /*
+    @Override
+    public Mono<TransactionResponseDto> processDebitCardPayment(TransactionRequestDTO request) {
+        return circuitBreakerFactory.create("productCircuitBreaker")
+                .run(
+                        productClient.getDebitCardDetails(request.getCardId()),
+                        throwable -> Mono.error(new BusinessException("Error al consultar tarjeta"))
+                )
+                .flatMap(card -> {
+                    if (!card.isActive()) {
+                        return Mono.error(new BusinessException("Tarjeta inactiva"));
+                    }
+                    // Validar cuentas asociadas, saldo, etc.
+                    Transaction tx = mapper.mapToEntity(request);
+                    tx.setType(TransactionType.DEBIT_CARD_PAYMENT);
+                    tx.setOrigin(TransactionOrigin.DEBIT_CARD);
+                    tx.setState(TransactionState.ACTIVE);
+                    tx.setCreatedAt(OffsetDateTime.now());
+                    return repository.save(tx).map(mapper::toDto);
+                });
+    }
+    */
 
     /*
       Method to process debit card withdrawal according to the order of accounts.
@@ -367,16 +451,32 @@ public class TransactionServiceImpl implements TransactionService {
                             .map(mapper::toDto); // Devuelve la transacción como DTO
                 });
     }
-
-    /*
-      Method to get the last 10 debit card transactions.
-      Método para obtener los últimos 10 movimientos de la tarjeta de débito.
-     */
+/*
     @Override
-    public Flux<TransactionResponseDto> getLast10CardTransactions(String customerId) {
-        return repository.findTop10ByCustomerIdAndStateOrderByCreatedAtDesc(customerId, TransactionState.ACTIVE)
-                .map(mapper::toDto);
+    public Mono<TransactionResponseDto> processOrderedDebitWithdrawal(TransactionRequestDTO request) {
+        return circuitBreakerFactory.create("productCircuitBreaker")
+                .run(
+                        productClient.getOrderedAccountsByCardId(request.getCardId()),
+                        throwable -> Mono.error(new BusinessException("No se pudo consultar cuentas asociadas"))
+                )
+                .flatMap(accounts -> {
+                    for (Account account : accounts) {
+                        if (account.getBalance().compareTo(request.getAmount()) >= 0) {
+                            Transaction tx = mapper.mapToEntity(request);
+                            tx.setAccountId(account.getId());
+                            tx.setAmount(request.getAmount().negate());
+                            tx.setType(TransactionType.DEBIT_WITHDRAWAL);
+                            tx.setState(TransactionState.ACTIVE);
+                            tx.setCreatedAt(OffsetDateTime.now());
+                            return repository.save(tx).map(mapper::toDto);
+                        }
+                    }
+                    return Mono.error(new BusinessException("Saldo insuficiente en cuentas asociadas"));
+                });
     }
+
+   */
+
 
     /*
       Method to get the active transaction by ID.

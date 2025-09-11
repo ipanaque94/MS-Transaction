@@ -103,6 +103,11 @@ paths:
   /api/transactions/transfer:
     post:
       summary: Realizar transferencia entre cuentas
+      description: >
+        Este endpoint está protegido con Circuit Breaker y TimeLimiter usando Resilience4j.
+        Si el servicio externo tarda más de 2 segundos en responder, se activa el timeout y se retorna una respuesta fallback.
+        El circuito se abre tras múltiples fallos consecutivos para evitar sobrecarga.
+
       operationId: transferBetweenAccounts
       requestBody:
         required: true

@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "DebitCardPaymentRequested",
+  "namespace": "com.enoc.transaction.events",
+  "doc": "Evento que solicita el procesamiento de un pago con tarjeta de débito.",
+  "fields": [
+    { "name": "paymentId", "type": "string", "doc": "Identificador único del pago." },
+    { "name": "cardNumber", "type": "string", "doc": "Número de tarjeta de débito." },
+    { "name": "customerId", "type": "string", "doc": "ID del cliente que realiza el pago." },
+    { "name": "merchantId", "type": "string", "doc": "ID del comercio receptor." },
+    { "name": "amount", "type": "double", "doc": "Monto del pago." },
+    { "name": "currency", "type": "string", "doc": "Moneda del pago (ej. PEN, USD)." },
+    { "name": "timestamp", "type": "string", "doc": "Fecha y hora del evento en formato ISO." }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "type": "record",
+  "name": "TransactionCreated",
+  "namespace": "com.enoc.transaction.events",
+  "doc": "Evento que representa la creación de una transacción en el sistema.",
+  "fields": [
+    {
+      "name": "transactionId",
+      "type": "string",
+      "doc": "Identificador único de la transacción."
+    },
+    {
+      "name": "customerId",
+      "type": "string",
+      "doc": "Identificador del cliente que realiza la transacción."
+    },
+    {
+      "name": "amount",
+      "type": "double",
+      "doc": "Monto involucrado en la transacción."
+    },
+    {
+      "name": "type",
+      "type": "string",
+      "doc": "Tipo de transacción (ej. DEPOSIT, WITHDRAW, TRANSFER)."
+    },
+    {
+      "name": "timestamp",
+      "type": "string",
+      "doc": "Fecha y hora en formato ISO 8601."
+    }
+  ]
+}

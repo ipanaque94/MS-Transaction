@@ -138,20 +138,20 @@ public class TransactionController {
                 .onErrorReturn(ResponseEntity.badRequest().build());  // Si ocurre un error, devuelve 400 (Bad Request)
     }
 
-
+}
     /*
       Get the last 10 debit card transactions.
       Obtener los últimos 10 movimientos de la tarjeta de débito.
-     */
+
     @GetMapping("/debit-card/{cardId}/last-10-transactions")
     public Flux<TransactionResponseDto> getLast10CardTransactions(@PathVariable String cardId) {
         return transactionService.getLast10CardTransactions(cardId);
     }
 
-    /*
+
       Get report
       Obtener reporte.
-     */
+
 
     @GetMapping("/balance-report")
     public Mono<ResponseEntity<TransactionResponseDto>> generateBalanceReport(
@@ -167,5 +167,5 @@ public class TransactionController {
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
     }
+    */
 
-}
