@@ -1,39 +1,41 @@
 package com.enoc.transaction.infrastructure.rest;
 
 import com.enoc.transaction.application.service.TransactionService;
+import com.enoc.transaction.application.service.cache.ReactiveCachedTransactionService;
 import com.enoc.transaction.domain.model.enums.TransactionType;
 import com.enoc.transaction.dto.request.TransactionRequestDTO;
 import com.enoc.transaction.dto.response.TransactionResponseDto;
 import java.time.OffsetDateTime;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/transactions")
 public class TransactionController {
 
     private final TransactionService transactionService;
+    private final ReactiveCachedTransactionService cachedService;
 
-    public TransactionController(TransactionService transactionService) {
-        this.transactionService = transactionService;
-    }
 
     @PostMapping
-    public Mono<ResponseEntity<TransactionResponseDto>> create(@RequestBody Mono<TransactionRequestDTO> request) {
-        return request
-                .flatMap(transactionService::create)
-                .map(response -> ResponseEntity.status(201).body(response));
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<TransactionResponseDto> create(@RequestBody Mono<TransactionRequestDTO> request) {
+        return request.flatMap(transactionService::create);
     }
 
     @GetMapping("/{id}")
-    public Mono<ResponseEntity<TransactionResponseDto>> getById(@PathVariable String id) {
-        return transactionService.findById(id)
+    public Mono<ResponseEntity<TransactionResponseDto>> getTransactionById(@PathVariable String id) {
+        return cachedService.getByIdCached(id)
                 .map(ResponseEntity::ok)
-                .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
+
 
     @GetMapping
     public Flux<TransactionResponseDto> getAll() {
@@ -80,10 +82,10 @@ public class TransactionController {
      */
     @GetMapping("/date-range")
     public Flux<TransactionResponseDto> getTransactionsByDateRange(
-            @RequestParam String start,  // Recibir como String
-            @RequestParam String end) {  // Recibir como String
+            @RequestParam String start,
+            @RequestParam String end) {
 
-        OffsetDateTime startDateTime = OffsetDateTime.parse(start);  // Parsear la fecha a OffsetDateTime
+        OffsetDateTime startDateTime = OffsetDateTime.parse(start);
         OffsetDateTime endDateTime = OffsetDateTime.parse(end);
 
         return transactionService.getTransactionsByDateRange(startDateTime, endDateTime);
@@ -97,8 +99,8 @@ public class TransactionController {
     @GetMapping("/has-overdue-debts/{customerId}")
     public Mono<ResponseEntity<Boolean>> hasOverdueCreditTransactions(@PathVariable String customerId) {
         return transactionService.hasOverdueCreditTransactions(customerId)
-                .map(ResponseEntity::ok) // Return the result as boolean
-                .defaultIfEmpty(ResponseEntity.notFound().build()); // Return 404 if not found
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
     /*
@@ -109,8 +111,8 @@ public class TransactionController {
     public Mono<ResponseEntity<TransactionResponseDto>> payThirdPartyCreditProduct(
             @RequestBody TransactionRequestDTO request) {
         return transactionService.payThirdPartyCreditProduct(request)
-                .map(response -> ResponseEntity.status(201).body(response)) // Return status 201 if payment is successful
-                .onErrorReturn(ResponseEntity.badRequest().build()); // Return 400 if there's an error
+                .map(response -> ResponseEntity.status(201).body(response))
+                .onErrorReturn(ResponseEntity.badRequest().build());
     }
 
     /*
@@ -121,8 +123,8 @@ public class TransactionController {
     public Mono<ResponseEntity<TransactionResponseDto>> processDebitCardPayment(
             @RequestBody TransactionRequestDTO request) {
         return transactionService.processDebitCardPayment(request)
-                .map(response -> ResponseEntity.status(201).body(response)) // Return status 201 if payment is successful
-                .onErrorReturn(ResponseEntity.badRequest().build()); // Return 400 if there's an error
+                .map(response -> ResponseEntity.status(201).body(response))
+                .onErrorReturn(ResponseEntity.badRequest().build());
     }
 
     /*
@@ -130,13 +132,13 @@ public class TransactionController {
       Procesar un retiro con tarjeta de débito según el orden de las cuentas asociadas.
      */
     // Método para procesar un retiro con tarjeta de débito según la cuenta seleccionada
-    @PostMapping("/withdrawal/debit-card")
-    public Mono<ResponseEntity<TransactionResponseDto>> processOrderedDebitWithdrawal(
-            @RequestBody TransactionRequestDTO request) {
-        return transactionService.processOrderedDebitWithdrawal(request)
-                .map(response -> ResponseEntity.status(201).body(response))  // Respuesta 201 (Creado) si el retiro es exitoso
-                .onErrorReturn(ResponseEntity.badRequest().build());  // Si ocurre un error, devuelve 400 (Bad Request)
-    }
+//    @PostMapping("/withdrawal/debit-card")
+//    public Mono<ResponseEntity<TransactionResponseDto>> processOrderedDebitWithdrawal(
+//            @RequestBody TransactionRequestDTO request) {
+//        return transactionService.processOrderedDebitWithdrawal(request)
+//                .map(response -> ResponseEntity.status(201).body(response))
+//                .onErrorReturn(ResponseEntity.badRequest().build());
+//    }
 
 }
     /*

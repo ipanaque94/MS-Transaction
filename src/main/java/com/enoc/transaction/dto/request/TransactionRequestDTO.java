@@ -15,7 +15,6 @@ import lombok.*;
 @EqualsAndHashCode
 public class TransactionRequestDTO {
     private String customerId;
-    private String cardId; //momentaneo
     private String debtorDni;   // DNI del titular de la deuda
     private String payerDni;    // DNI del tercero que paga
     private String productId;

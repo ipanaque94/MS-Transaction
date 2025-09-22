@@ -19,7 +19,7 @@ public class ExternalTransferHandler {
     private final TransactionRepository repository;
 
     public void process(ExternalTransferRequested event) {
-        log.info("📥 Evento recibido: external.transfer.requested | ID={}", event.getTransferId());
+        log.info("Evento recibido: external.transfer.requested | ID={}", event.getTransferId());
 
         try {
             validate(event);
@@ -28,10 +28,10 @@ public class ExternalTransferHandler {
 
             repository.save(transaction);
 
-            log.info("✅ Transferencia externa persistida correctamente: {}", transaction.getId());
+            log.info("Transferencia externa persistida correctamente: {}", transaction.getId());
 
         } catch (Exception ex) {
-            log.error("❌ Error al procesar transferencia externa {}: {}", event.getTransferId(), ex.getMessage());
+            log.error("Error al procesar transferencia externa {}: {}", event.getTransferId(), ex.getMessage());
         }
     }
 

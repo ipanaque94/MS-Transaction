@@ -30,7 +30,7 @@ public interface TransactionRepository extends ReactiveMongoRepository<Transacti
 
     // Custom method to get transactions by card ID and state, ordered by creation date.
     // Metodo personalizado para obtener transacciones por ID de tarjeta y estado, ordenadas por fecha de creación.
-    Flux<Transaction> findByCardIdAndStateOrderByCreatedAtDesc(String cardId, TransactionState state);
+    Flux<Transaction> findByProductIdAndStateOrderByCreatedAtDesc(String productId, TransactionState state);
 
     // Custom method to get the last 10 transactions of a customer, ordered by creation date.
     // Método personalizado para obtener las últimas 10 transacciones de un cliente, ordenadas por fecha de creación.

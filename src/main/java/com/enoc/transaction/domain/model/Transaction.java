@@ -7,8 +7,8 @@ import com.enoc.transaction.domain.model.enums.TransactionType;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import lombok.*;
-import org.bson.codecs.pojo.annotations.BsonId;
 import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -22,7 +22,7 @@ import org.springframework.data.mongodb.core.mapping.Field;
 @Document(collection = "transactions")
 public class Transaction {
 
-    @BsonId
+    @Id
     private String id;
     private String customerId;
     private String debtorDni; // DNI del titular de la deuda

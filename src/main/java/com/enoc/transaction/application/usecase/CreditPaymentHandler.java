@@ -19,7 +19,7 @@ public class CreditPaymentHandler {
     private final TransactionRepository repository;
 
     public void process(CreditPaymentRequested event) {
-        log.info("📥 Evento recibido: credit.payment.requested | ID={}", event.getPaymentId());
+        log.info("Evento recibido: credit.payment.requested | ID={}", event.getPaymentId());
 
         try {
             validate(event);
@@ -28,10 +28,10 @@ public class CreditPaymentHandler {
 
             repository.save(transaction);
 
-            log.info("✅ Pago de crédito persistido correctamente: {}", transaction.getId());
+            log.info("Pago de crédito persistido correctamente: {}", transaction.getId());
 
         } catch (Exception ex) {
-            log.error("❌ Error al procesar pago de crédito {}: {}", event.getPaymentId(), ex.getMessage());
+            log.error("Error al procesar pago de crédito {}: {}", event.getPaymentId(), ex.getMessage());
         }
     }
 

@@ -19,7 +19,7 @@ public class TransactionCreatedHandler {
     private final TransactionRepository repository;
 
     public void process(TransactionCreated event) {
-        log.info("📥 Evento recibido: transaction.created | ID={}", event.getTransactionId());
+        log.info(" Evento recibido: transaction.created | ID={}", event.getTransactionId());
 
         try {
             validate(event);
@@ -28,10 +28,10 @@ public class TransactionCreatedHandler {
 
             repository.save(transaction);
 
-            log.info("✅ Transacción persistida correctamente: {}", transaction.getId());
+            log.info("Transacción Almacenada correctamente: {}", transaction.getId());
 
         } catch (Exception ex) {
-            log.error("❌ Error al procesar transacción {}: {}", event.getTransactionId(), ex.getMessage());
+            log.error(" Error al procesar transacción {}: {}", event.getTransactionId(), ex.getMessage());
         }
     }
 

@@ -1,5 +1,6 @@
 package com.enoc.transaction.service;
 
+import com.enoc.transaction.application.service.cache.ReactiveCachedTransactionService;
 import com.enoc.transaction.domain.exception.ResourceNotFoundException;
 import com.enoc.transaction.domain.model.Transaction;
 import com.enoc.transaction.domain.model.enums.TransactionOrigin;
@@ -9,7 +10,9 @@ import com.enoc.transaction.domain.repository.TransactionRepository;
 import com.enoc.transaction.domain.service.TransactionValidator;
 import com.enoc.transaction.dto.request.TransactionRequestDTO;
 import com.enoc.transaction.dto.response.TransactionResponseDto;
+import com.enoc.transaction.events.ExternalTransferRequested;
 import com.enoc.transaction.infrastructure.mapper.TransactionMapper;
+import com.enoc.transaction.infrastructure.messaging.producer.ExternalTransferProducer;
 import com.enoc.transaction.infrastructure.service.TransactionServiceImpl;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -17,6 +20,7 @@ import java.util.List;
 import javassist.NotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,7 +28,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,12 +39,17 @@ class TransactionServiceImplTest {
 
     @Mock
     private TransactionRepository repository;
+    @Mock
+    private ReactiveCachedTransactionService cachedService;
 
     @Mock
     private TransactionMapper mapper;
 
     @Mock
     private TransactionValidator validator;
+
+    @Mock
+    private ExternalTransferProducer externalTransferProducer;
 
     @InjectMocks
     private TransactionServiceImpl service;
@@ -213,18 +225,49 @@ class TransactionServiceImplTest {
     }
 
     @Test
-    void createExternalTransferShouldPersistTransaction() {
-        TransactionRequestDTO request = buildRequest(TransactionType.TRANSFER_EXTERNAL);
-        Transaction tx = buildTransaction(TransactionType.TRANSFER_EXTERNAL);
-        TransactionResponseDto expected = buildResponseDto(TransactionType.TRANSFER_EXTERNAL);
+    void createExternalTransferShouldPersistTransactionAndPublishEvent() {
+        // Arrange
+        TransactionRequestDTO request = TransactionRequestDTO.builder()
+                .customerId("CUST123")
+                .accountId("ACC456")
+                .destinationAccountId("DEST789")
+                .operationTypeId("BANK001")
+                .amount(BigDecimal.valueOf(100.0))
+                .build();
+
+        Transaction tx = Transaction.builder()
+                .id("TX999")
+                .customerId("CUST123")
+                .amount(BigDecimal.valueOf(100.0))
+                .build();
+
+        TransactionResponseDto expected = TransactionResponseDto.builder()
+                .id("TX999")
+                .customerId("CUST123")
+                .amount(BigDecimal.valueOf(100.0))
+                .build();
 
         when(mapper.mapToEntity(any())).thenReturn(tx);
         when(repository.save(any())).thenReturn(Mono.just(tx));
         when(mapper.toDto(any())).thenReturn(expected);
 
+        // Act
         StepVerifier.create(service.createExternalTransfer(request))
                 .expectNext(expected)
                 .verifyComplete();
+
+        // Assert
+        ArgumentCaptor<ExternalTransferRequested> captor = ArgumentCaptor.forClass(ExternalTransferRequested.class);
+        verify(externalTransferProducer).publish(captor.capture());
+
+        ExternalTransferRequested event = captor.getValue();
+
+        assertEquals("TX999", event.getTransferId().toString());
+        assertEquals("ACC456", event.getOriginAccountId().toString());
+        assertEquals("DEST789", event.getDestinationAccountNumber().toString());
+        assertEquals("BANK001", event.getBankCode().toString());
+        assertEquals(100.0, event.getAmount());
+        assertNotNull(event.getTimestamp());
     }
 
     @Test
@@ -273,7 +316,7 @@ class TransactionServiceImplTest {
     @Test
     void createDebitWithdrawalOrderedShouldSucceedWithSufficientBalance() {
         TransactionRequestDTO request = buildRequest(TransactionType.DEBIT_WITHDRAWAL);
-        request.setCardId("card123");
+        request.setProductId("card123");
 
         Transaction previousTx = new Transaction();
         previousTx.setAccountId("acc001");
@@ -286,7 +329,7 @@ class TransactionServiceImplTest {
         TransactionResponseDto expected = buildResponseDto(TransactionType.DEBIT_WITHDRAWAL);
         expected.setAccountId("acc001");
 
-        when(repository.findByCardIdAndStateOrderByCreatedAtDesc(eq("card123"), any()))
+        when(repository.findByProductIdAndStateOrderByCreatedAtDesc(eq("card123"), any()))
                 .thenReturn(Flux.just(previousTx));
         when(mapper.mapToEntity(any())).thenReturn(tx);
         when(repository.save(any())).thenReturn(Mono.just(tx));
@@ -312,11 +355,9 @@ class TransactionServiceImplTest {
 
     @Test
     void findByIdShouldReturnMappedTransaction() {
-        Transaction tx = buildTransaction(TransactionType.WITHDRAWAL);
         TransactionResponseDto dto = buildResponseDto(TransactionType.WITHDRAWAL);
 
-        when(repository.findById("tx123")).thenReturn(Mono.just(tx));
-        when(mapper.toDto(tx)).thenReturn(dto);
+        when(cachedService.getByIdCached("tx123")).thenReturn(Mono.just(dto));
 
         StepVerifier.create(service.findById("tx123"))
                 .expectNext(dto)
@@ -424,7 +465,7 @@ class TransactionServiceImplTest {
     @Test
     void processOrderedDebitWithdrawalShouldSucceedWithSufficientFunds() {
         TransactionRequestDTO request = buildRequest(TransactionType.DEBIT_WITHDRAWAL);
-        request.setCardId("card123");
+        request.setProductId("card123");
         request.setAmount(new BigDecimal("50.00"));
 
         Transaction previous = buildTransaction(TransactionType.DEPOSIT);
@@ -434,7 +475,7 @@ class TransactionServiceImplTest {
         tx.setAmount(new BigDecimal("-50.00"));
         TransactionResponseDto dto = buildResponseDto(TransactionType.DEBIT_WITHDRAWAL);
 
-        when(repository.findByCardIdAndStateOrderByCreatedAtDesc(eq("card123"), any()))
+        when(repository.findByProductIdAndStateOrderByCreatedAtDesc(eq("card123"), any()))
                 .thenReturn(Flux.just(previous));
         when(mapper.mapToEntity(any())).thenReturn(tx);
         when(repository.save(any())).thenReturn(Mono.just(tx));
@@ -462,11 +503,9 @@ class TransactionServiceImplTest {
     */
     @Test
     void getActiveTransactionByIdShouldReturnDtoWhenFound() {
-        Transaction tx = buildTransaction(TransactionType.DEPOSIT);
         TransactionResponseDto dto = buildResponseDto(TransactionType.DEPOSIT);
 
-        when(repository.findByIdAndState("tx001", TransactionState.ACTIVE)).thenReturn(Mono.just(tx));
-        when(mapper.toDto(tx)).thenReturn(dto);
+        when(cachedService.getActiveByIdCached("tx001")).thenReturn(Mono.just(dto));
 
         StepVerifier.create(service.getActiveTransactionById("tx001"))
                 .expectNext(dto)
@@ -475,20 +514,20 @@ class TransactionServiceImplTest {
 
     @Test
     void getActiveTransactionByIdShouldThrowWhenNotFound() {
-        when(repository.findByIdAndState("tx001", TransactionState.ACTIVE)).thenReturn(Mono.empty());
+        when(cachedService.getActiveByIdCached("tx001"))
+                .thenReturn(Mono.error(new ResourceNotFoundException("No existe la transacción")));
 
         StepVerifier.create(service.getActiveTransactionById("tx001"))
                 .expectError(ResourceNotFoundException.class)
                 .verify();
     }
 
+
     @Test
     void getTransactionByIdShouldReturnDtoWhenFound() {
-        Transaction tx = buildTransaction(TransactionType.WITHDRAWAL);
         TransactionResponseDto dto = buildResponseDto(TransactionType.WITHDRAWAL);
 
-        when(repository.findById("tx002")).thenReturn(Mono.just(tx));
-        when(mapper.toDto(tx)).thenReturn(dto);
+        when(cachedService.getByIdCached("tx002")).thenReturn(Mono.just(dto));
 
         StepVerifier.create(service.getTransactionById("tx002"))
                 .expectNext(dto)
@@ -497,7 +536,8 @@ class TransactionServiceImplTest {
 
     @Test
     void getTransactionByIdShouldThrowWhenNotFound() {
-        when(repository.findById("tx002")).thenReturn(Mono.empty());
+        when(cachedService.getByIdCached("tx002"))
+                .thenReturn(Mono.error(new ResourceNotFoundException("No existe la transacción")));
 
         StepVerifier.create(service.getTransactionById("tx002"))
                 .expectError(ResourceNotFoundException.class)
@@ -572,11 +612,9 @@ class TransactionServiceImplTest {
 
     @Test
     void getLastTransactionShouldReturnDto() {
-        Transaction tx = buildTransaction(TransactionType.DEBIT_CARD_PAYMENT);
         TransactionResponseDto dto = buildResponseDto(TransactionType.DEBIT_CARD_PAYMENT);
 
-        when(repository.findTopByCustomerIdAndStateOrderByCreatedAtDesc("cust123", TransactionState.ACTIVE)).thenReturn(Mono.just(tx));
-        when(mapper.toDto(tx)).thenReturn(dto);
+        when(cachedService.getLastByCustomerIdCached("cust123")).thenReturn(Mono.just(dto));
 
         StepVerifier.create(service.getLastTransaction("cust123"))
                 .expectNext(dto)

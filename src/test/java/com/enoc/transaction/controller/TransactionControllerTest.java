@@ -1,6 +1,7 @@
 package com.enoc.transaction.controller;
 
 import com.enoc.transaction.application.service.TransactionService;
+import com.enoc.transaction.application.service.cache.ReactiveCachedTransactionService;
 import com.enoc.transaction.domain.model.enums.StatusEnum;
 import com.enoc.transaction.domain.model.enums.TransactionOrigin;
 import com.enoc.transaction.domain.model.enums.TransactionType;
@@ -15,19 +16,27 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 
 @WebFluxTest(TransactionController.class)
+@TestPropertySource(properties = {
+        "spring.cloud.config.enabled=false"
+})
 public class TransactionControllerTest {
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @MockBean
+    private ReactiveCachedTransactionService cachedService;
 
     @MockBean
     private TransactionService transactionService;
@@ -74,21 +83,24 @@ public class TransactionControllerTest {
     // 2. Test: Get transaction by ID (Obtener transacción por ID)
     @Test
     void getByIdShouldReturnTransaction() {
-        // Arrange: Prepare response DTO
         TransactionResponseDto response = TransactionResponseDto.builder()
                 .id("tx123")
                 .amount(BigDecimal.valueOf(100))
                 .build();
 
-        when(transactionService.findById("tx123")).thenReturn(Mono.just(response));
-
-        // Act & Assert: Make request and validate response
+        when(cachedService.getByIdCached("tx123")).thenReturn(Mono.just(response));
+        
         webTestClient.get()
                 .uri("/api/transactions/tx123")
                 .exchange()
-                .expectStatus().isOk()  // Verifica que el status sea OK (200)
+                .expectStatus().isOk()
                 .expectBody(TransactionResponseDto.class)
-                .isEqualTo(response);  // Verifica que el cuerpo de la respuesta sea igual al esperado
+                .consumeWith(result -> {
+                    TransactionResponseDto body = result.getResponseBody();
+                    assertThat(body).isNotNull();
+                    assertThat(body.getId()).isEqualTo("tx123");
+                    assertThat(body.getAmount()).isEqualTo(BigDecimal.valueOf(100));
+                });
     }
 
     // 3. Test: Get all transactions (Obtener todas las transacciones)

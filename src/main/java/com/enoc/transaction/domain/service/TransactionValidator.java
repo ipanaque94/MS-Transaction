@@ -2,9 +2,10 @@ package com.enoc.transaction.domain.service;
 
 import com.enoc.transaction.dto.request.TransactionRequestDTO;
 import java.math.BigDecimal;
+import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-
+@Component
 public class TransactionValidator {
 
     /*

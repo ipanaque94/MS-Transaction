@@ -19,7 +19,7 @@ public class OrderedDebitWithdrawalHandler {
     private final TransactionRepository repository;
 
     public void process(OrderedDebitWithdrawalRequested event) {
-        log.info("📥 Evento recibido: ordered.debit.withdrawal.requested | ID={}", event.getWithdrawalId());
+        log.info("Evento recibido: ordered.debit.withdrawal.requested | ID={}", event.getWithdrawalId());
 
         try {
             validate(event);
@@ -28,10 +28,10 @@ public class OrderedDebitWithdrawalHandler {
 
             repository.save(transaction);
 
-            log.info("✅ Retiro programado persistido correctamente: {}", transaction.getId());
+            log.info("Retiro programado persistido correctamente: {}", transaction.getId());
 
         } catch (Exception ex) {
-            log.error("❌ Error al procesar retiro programado {}: {}", event.getWithdrawalId(), ex.getMessage());
+            log.error("Error al procesar retiro programado {}: {}", event.getWithdrawalId(), ex.getMessage());
         }
     }
 

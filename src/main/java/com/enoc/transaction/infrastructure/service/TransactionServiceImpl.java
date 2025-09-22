@@ -1,8 +1,9 @@
 package com.enoc.transaction.infrastructure.service;
 
+import com.enoc.transaction.application.event.TransactionEventPublisher;
 import com.enoc.transaction.application.service.TransactionService;
+import com.enoc.transaction.application.service.cache.ReactiveCachedTransactionService;
 import com.enoc.transaction.domain.exception.BusinessException;
-import com.enoc.transaction.domain.exception.ResourceNotFoundException;
 import com.enoc.transaction.domain.model.Transaction;
 import com.enoc.transaction.domain.model.enums.TransactionOrigin;
 import com.enoc.transaction.domain.model.enums.TransactionState;
@@ -11,7 +12,9 @@ import com.enoc.transaction.domain.repository.TransactionRepository;
 import com.enoc.transaction.domain.service.TransactionValidator;
 import com.enoc.transaction.dto.request.TransactionRequestDTO;
 import com.enoc.transaction.dto.response.TransactionResponseDto;
+import com.enoc.transaction.events.ExternalTransferRequested;
 import com.enoc.transaction.infrastructure.mapper.TransactionMapper;
+import com.enoc.transaction.infrastructure.messaging.producer.ExternalTransferProducer;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -22,7 +25,10 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import javassist.NotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.circuitbreaker.ReactiveCircuitBreakerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -31,15 +37,18 @@ import reactor.core.publisher.Mono;
 @Service
 public class TransactionServiceImpl implements TransactionService {
 
-    //@Autowired
-    //private ReactiveCircuitBreakerFactory<?, ?> circuitBreakerFactory;
-
-    @Value("${transaction.free-limit}")
-    private int transactionLimit;
-
+    private final ReactiveCachedTransactionService cachedService;
+    private final ReactiveCircuitBreakerFactory<?, ?> circuitBreakerFactory;
     private final TransactionRepository repository;
     private final TransactionMapper mapper;
     private final TransactionValidator validator;
+    private final ExternalTransferProducer externalTransferProducer;
+    private final TransactionEventPublisher transactionEventPublisher;
+    private static final Logger log = LoggerFactory.getLogger(TransactionServiceImpl.class);
+
+
+    @Value("${transaction.free-limit}")
+    private Double transactionLimit;
 
 
     /*
@@ -84,7 +93,10 @@ public class TransactionServiceImpl implements TransactionService {
                     tx.setType(TransactionType.DEPOSIT);
                     tx.setState(TransactionState.ACTIVE);
                     tx.setCreatedAt(OffsetDateTime.now());
-                    return repository.save(tx).map(mapper::toDto);
+                    return repository.save(tx)
+                            .doOnSuccess(transactionEventPublisher::publishCreated)
+                            .map(mapper::toDto)
+                            ;
                 });
     }
 
@@ -102,7 +114,9 @@ public class TransactionServiceImpl implements TransactionService {
                     tx.setAmount(request.getAmount().negate());
                     tx.setState(TransactionState.ACTIVE);
                     tx.setCreatedAt(OffsetDateTime.now());
-                    return repository.save(tx).map(mapper::toDto);
+                    return repository.save(tx)
+                            .doOnSuccess(transactionEventPublisher::publishCreated)
+                            .map(mapper::toDto);
                 });
     }
 
@@ -113,11 +127,13 @@ public class TransactionServiceImpl implements TransactionService {
         tx.setType(TransactionType.CREDIT_CHARGE);
         tx.setState(TransactionState.ACTIVE);
         tx.setCreatedAt(OffsetDateTime.now());
-        return repository.save(tx).map(mapper::toDto);
+        return repository.save(tx)
+                .doOnSuccess(transactionEventPublisher::publishCreated)
+                .map(mapper::toDto);
     }
 
 
-    @Override
+    /*@Override
     public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO request) {
         return hasOverdueCreditTransactions(request.getCustomerId())
                 .flatMap(hasDebt -> {
@@ -131,27 +147,31 @@ public class TransactionServiceImpl implements TransactionService {
                     return repository.save(tx).map(mapper::toDto);
                 });
     }
-
-    /* con circuit
-    @Override
-public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO request) {
-    return circuitBreakerFactory.create("customerCircuitBreaker")
-        .run(
-            customerClient.validatePaymentAuthorization(request.getCustomerId(), request.getProductId()),
-            throwable -> Mono.just(false)
-        )
-        .flatMap(isAuthorized -> {
-            if (!isAuthorized) {
-                return Mono.error(new BusinessException("Cliente no autorizado para pagar este producto"));
-            }
-            Transaction tx = mapper.mapToEntity(request);
-            tx.setType(TransactionType.CREDIT_PAYMENT);
-            tx.setState(TransactionState.ACTIVE);
-            tx.setCreatedAt(OffsetDateTime.now());
-            return repository.save(tx).map(mapper::toDto);
-        });
-}
 */
+// con circuit
+    @Override
+    public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO request) {
+        return circuitBreakerFactory.create("debtCircuitBreaker")
+                .run(
+                        hasOverdueCreditTransactions(request.getCustomerId()), // protegido por circuit breaker
+                        throwable -> Mono.just(false) // fallback si el servicio falla
+                )
+                .flatMap(hasDebt -> {
+                    if (!hasDebt) {
+                        return Mono.error(new IllegalArgumentException("No hay deuda vencida para pagar"));
+                    }
+
+                    Transaction tx = mapper.mapToEntity(request);
+                    tx.setType(TransactionType.CREDIT_PAYMENT);
+                    tx.setState(TransactionState.ACTIVE);
+                    tx.setCreatedAt(OffsetDateTime.now());
+
+                    return repository.save(tx)
+                            .doOnSuccess(transactionEventPublisher::publishCreated)
+                            .map(mapper::toDto);
+                });
+    }
+
 
     @Override
     public Mono<TransactionResponseDto> createInternalTransfer(TransactionRequestDTO request) {
@@ -159,38 +179,46 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
         tx.setType(TransactionType.TRANSFER_INTERNAL);
         tx.setState(TransactionState.ACTIVE);
         tx.setCreatedAt(OffsetDateTime.now());
-        return repository.save(tx).map(mapper::toDto);
+        return repository.save(tx)
+                .doOnSuccess(transactionEventPublisher::publishCreated)
+                .map(mapper::toDto);
     }
 
-
+    /*
+        @Override
+        public Mono<TransactionResponseDto> createExternalTransfer(TransactionRequestDTO request) {
+            Transaction tx = mapper.mapToEntity(request);
+            tx.setType(TransactionType.TRANSFER_EXTERNAL);
+            tx.setState(TransactionState.ACTIVE);
+            tx.setCreatedAt(OffsetDateTime.now());
+            return repository.save(tx).map(mapper::toDto);
+        }
+        */
+//creación de una transferencia externa en un sistema basado en eventos
     @Override
     public Mono<TransactionResponseDto> createExternalTransfer(TransactionRequestDTO request) {
         Transaction tx = mapper.mapToEntity(request);
         tx.setType(TransactionType.TRANSFER_EXTERNAL);
-        tx.setState(TransactionState.ACTIVE);
+        tx.setState(TransactionState.PENDING);
         tx.setCreatedAt(OffsetDateTime.now());
-        return repository.save(tx).map(mapper::toDto);
+
+        return repository.save(tx)
+                .doOnNext(savedTx -> {
+                    ExternalTransferRequested event = new ExternalTransferRequested(
+                            savedTx.getId(),
+                            request.getAccountId(),
+                            request.getDestinationAccountId(),
+                            request.getOperationTypeId(),
+                            savedTx.getAmount().doubleValue(),
+                            OffsetDateTime.now().toString()
+                    );
+                    externalTransferProducer.publish(event);
+                    transactionEventPublisher.publishCreated(savedTx);
+
+                })
+                .map(mapper::toDto);
     }
-/*
-    @Override
-    public Mono<TransactionResponseDto> createExternalTransfer(TransactionRequestDTO request) {
-        return circuitBreakerFactory.create("productCircuitBreaker")
-                .run(
-                        productClient.getProductById(request.getProductId()),
-                        throwable -> Mono.error(new BusinessException("product-service no respondió"))
-                )
-                .flatMap(product -> {
-                    if (!product.isActive()) {
-                        return Mono.error(new BusinessException("Producto destino inactivo"));
-                    }
-                    Transaction tx = mapper.mapToEntity(request);
-                    tx.setType(TransactionType.TRANSFER_EXTERNAL);
-                    tx.setState(TransactionState.ACTIVE);
-                    tx.setCreatedAt(OffsetDateTime.now());
-                    return repository.save(tx).map(mapper::toDto);
-                });
-    }
-*/
+
 
     @Override
     public Mono<TransactionResponseDto> createDebitCardCharge(TransactionRequestDTO request) {
@@ -199,7 +227,9 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
         tx.setOrigin(TransactionOrigin.DEBIT_CARD);
         tx.setState(TransactionState.ACTIVE);
         tx.setCreatedAt(OffsetDateTime.now());
-        return repository.save(tx).map(mapper::toDto);
+        return repository.save(tx)
+                .doOnSuccess(transactionEventPublisher::publishCreated)
+                .map(mapper::toDto);
     }
 
 
@@ -214,14 +244,16 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
             tx.setOrigin(TransactionOrigin.DEBIT_CARD);
             tx.setState(TransactionState.ACTIVE);
             tx.setCreatedAt(OffsetDateTime.now());
-            return repository.save(tx).map(mapper::toDto);
+            return repository.save(tx)
+                    .doOnSuccess(transactionEventPublisher::publishCreated)
+                    .map(mapper::toDto);
         }));
     }
 
 
     @Override
     public Mono<TransactionResponseDto> createDebitWithdrawalOrdered(TransactionRequestDTO request) {
-        return repository.findByCardIdAndStateOrderByCreatedAtDesc(request.getCardId(), TransactionState.ACTIVE)
+        return repository.findByProductIdAndStateOrderByCreatedAtDesc(request.getProductId(), TransactionState.ACTIVE)
                 .collectList()
                 .flatMap(transactions -> {
                     // Agrupar por accountId y calcular saldo acumulado
@@ -247,7 +279,9 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
                     tx.setState(TransactionState.ACTIVE);
                     tx.setCreatedAt(OffsetDateTime.now());
 
-                    return repository.save(tx).map(mapper::toDto);
+                    return repository.save(tx)
+                            .doOnSuccess(transactionEventPublisher::publishCreated)
+                            .map(mapper::toDto);
                 });
     }
 
@@ -264,13 +298,13 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
 
     /*
      Method to get a transaction by its ID.
-     Método para obtener una transacción por su ID.
+     Método para obtener una transacción por su ID POR CACHE.
      */
     @Override
     public Mono<TransactionResponseDto> findById(String id) {
-        return repository.findById(id)
-                .map(mapper::toDto);
+        return cachedService.getByIdCached(id);
     }
+
 
     /*
      Method to update a transaction.
@@ -430,7 +464,7 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
      */
     @Override
     public Mono<TransactionResponseDto> processOrderedDebitWithdrawal(TransactionRequestDTO dto) {
-        return repository.findByCardIdAndStateOrderByCreatedAtDesc(dto.getCardId(), TransactionState.ACTIVE)
+        return repository.findByProductIdAndStateOrderByCreatedAtDesc(dto.getProductId(), TransactionState.ACTIVE)
                 .next()
                 .flatMap(transaction -> {
                     BigDecimal availableAmount = transaction.getAmount();
@@ -480,14 +514,13 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
 
     /*
       Method to get the active transaction by ID.
-      Método para obtener la transacción activa por ID.
+      Método para obtener la transacción activa por ID POR CACHE .
      */
     @Override
     public Mono<TransactionResponseDto> getActiveTransactionById(String id) {
-        return repository.findByIdAndState(id, TransactionState.ACTIVE)
-                .switchIfEmpty(Mono.error(new ResourceNotFoundException("Active transaction not found")))
-                .map(mapper::toDto);
+        return cachedService.getActiveByIdCached(id);
     }
+
 
     /*
       Method to get a transaction by its ID.
@@ -495,10 +528,9 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
      */
     @Override
     public Mono<TransactionResponseDto> getTransactionById(String id) {
-        return repository.findById(id)
-                .switchIfEmpty(Mono.error(new ResourceNotFoundException("Transaction not found")))
-                .map(mapper::toDto);
+        return cachedService.getByIdCached(id);
     }
+
 
     /*
       Method to delete transactions logically (if necessary).
@@ -553,8 +585,7 @@ public Mono<TransactionResponseDto> createCreditPayment(TransactionRequestDTO re
      */
     @Override
     public Mono<TransactionResponseDto> getLastTransaction(String customerId) {
-        return repository.findTopByCustomerIdAndStateOrderByCreatedAtDesc(customerId, TransactionState.ACTIVE)
-                .map(mapper::toDto);
+        return cachedService.getLastByCustomerIdCached(customerId);
     }
 
     /*

@@ -18,7 +18,7 @@ public class ApiApiImpl {
         this.controller = controller;
     }
 
-    public Mono<ResponseEntity<TransactionResponseDto>> createTransaction(
+    public Mono<TransactionResponseDto> createTransaction(
             Mono<TransactionRequestDTO> transactionRequest,
             ServerWebExchange exchange) {
         return controller.create(transactionRequest);
@@ -27,7 +27,7 @@ public class ApiApiImpl {
     public Mono<ResponseEntity<TransactionResponseDto>> getTransactionById(
             String id,
             ServerWebExchange exchange) {
-        return controller.getById(id);
+        return controller.getTransactionById(id);
     }
 
     public Mono<ResponseEntity<Flux<TransactionResponseDto>>> getAllTransactions(ServerWebExchange exchange) {
